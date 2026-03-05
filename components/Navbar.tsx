@@ -56,6 +56,14 @@ export default function Navbar() {
 
         {/* Right side */}
         <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+
+          {[{ href: '/threads', label: 'Threads' }, { href: '/constellation', label: '✦ Map' }, { href: '/year/' + new Date().getFullYear(), label: 'Year' }].map(({ href, label }) => (
+            <Link key={href} href={href} style={{ fontSize: '0.8125rem', color: 'var(--fg-muted)', textDecoration: 'none', padding: '0.375rem 0.75rem', borderRadius: '6px', transition: 'all 0.15s' }}
+              onMouseEnter={(e) => { (e.currentTarget as HTMLAnchorElement).style.backgroundColor = 'var(--bg-secondary)'; (e.currentTarget as HTMLAnchorElement).style.color = 'var(--fg)'; }}
+              onMouseLeave={(e) => { (e.currentTarget as HTMLAnchorElement).style.backgroundColor = 'transparent'; (e.currentTarget as HTMLAnchorElement).style.color = 'var(--fg-muted)'; }}>
+              {label}
+            </Link>
+          ))}
           <Link
             href="/admin"
             style={{

@@ -24,9 +24,8 @@ export const metadata: Metadata = {
     default: "Mihir Writes",
     template: "Mihir Writes | %s",
   },
-  description:
-    "Personal blog by Mihir — thoughts on tech, frontend engineering, and everything in between.",
-  keywords: ["blog", "frontend", "engineering", "react", "nextjs", "personal"],
+  description: "Personal blog by Mihir — thoughts on something, nothing, and everything in between.",
+  keywords: ["blog", "personal", "something", "nothing", "everything"],
   authors: [{ name: "Mihir" }],
   creator: "Mihir",
   robots: {
@@ -41,13 +40,13 @@ export const metadata: Metadata = {
     siteName: "Mihir Writes",
     title: "Mihir Writes",
     description:
-      "Personal blog by Mihir — thoughts on tech, frontend engineering, and everything in between.",
+      "Personal blog by Mihir — thoughts on something, nothing, and everything in between.",
   },
   twitter: {
     card: "summary_large_image",
     title: "Mihir Writes",
     description:
-      "Personal blog by Mihir — thoughts on tech, frontend engineering, and everything in between.",
+      "Personal blog by Mihir — thoughts on something, nothing, and everything in between.",
   },
 };
 
