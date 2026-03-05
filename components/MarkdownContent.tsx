@@ -97,7 +97,7 @@ export default function MarkdownContent({ content }: Props) {
           },
 
           a({ href, children }) {
-            if (!href || typeof href !== "string") return <a href={undefined}>{children}</a>;
+            if (!href || typeof href !== "string") return <a href={undefined}>{children}</a>; 
 
             // Cloudinary raw uploads (PDFs) — detect by /raw/upload/ in URL or .pdf extension
             const isPdf =
