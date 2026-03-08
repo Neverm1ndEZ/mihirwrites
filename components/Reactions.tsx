@@ -13,15 +13,75 @@ const REACTIONS = [
   { type: "fire", emoji: "🔥", label: "Fire" },
 ] as const;
 
-function getOrCreateVoterId(): string {
-  const key = "mw_voter_id";
-  let id = localStorage.getItem(key);
-  if (!id) {
-    id = crypto.randomUUID();
-    localStorage.setItem(key, id);
-  }
-  return id;
+// ─── Device Fingerprinting ────────────────────────────────────────────────────
+// Combines stable, passive browser signals into a deterministic device ID.
+// Clearing localStorage does NOT reset this — a new UUID is only the fallback
+// for environments where signals are unavailable (e.g. SSR / bots).
+async function hashString(str: string): Promise<string> {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(str);
+  const hashBuffer = await crypto.subtle.digest("SHA-256", data);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map((b) => b.toString(16).padStart(2, "0")).join("").slice(0, 40);
 }
+
+function getCanvasFingerprint(): string {
+  try {
+    const canvas = document.createElement("canvas");
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return "";
+    ctx.textBaseline = "top";
+    ctx.font = "14px 'Arial'";
+    ctx.fillStyle = "#f60";
+    ctx.fillRect(125, 1, 62, 20);
+    ctx.fillStyle = "#069";
+    ctx.fillText("mw-fp", 2, 15);
+    ctx.fillStyle = "rgba(102,204,0,0.7)";
+    ctx.fillText("mw-fp", 4, 17);
+    return canvas.toDataURL().slice(-40); // last 40 chars encode GPU/renderer diffs
+  } catch {
+    return "";
+  }
+}
+
+async function getDeviceFingerprint(): Promise<string> {
+  const CACHE_KEY = "mw_device_fp";
+
+  // 1. Try cache first (localStorage might be cleared, but this is just a speed optimisation)
+  try {
+    const cached = localStorage.getItem(CACHE_KEY);
+    if (cached && cached.length >= 16) return cached;
+  } catch { /* incognito may throw */ }
+
+  // 2. Collect stable device signals
+  const signals = [
+    navigator.userAgent,
+    navigator.language,
+    navigator.hardwareConcurrency ?? "",
+    screen.colorDepth,
+    screen.width + "x" + screen.height,
+    new Date().getTimezoneOffset(),
+    navigator.platform ?? "",
+    (navigator as Navigator & { deviceMemory?: number }).deviceMemory ?? "",
+    getCanvasFingerprint(),
+    // WebGL renderer — encodes GPU info
+    (() => {
+      try {
+        const gl = document.createElement("canvas").getContext("webgl");
+        const ext = gl?.getExtension("WEBGL_debug_renderer_info");
+        return ext ? gl?.getParameter(ext.UNMASKED_RENDERER_WEBGL) ?? "" : "";
+      } catch { return ""; }
+    })(),
+  ].join("||");
+
+  const fp = await hashString(signals);
+
+  // 3. Cache it — if localStorage is unavailable the hash is still computed fresh each time
+  try { localStorage.setItem(CACHE_KEY, fp); } catch { /* */ }
+
+  return fp;
+}
+// ─────────────────────────────────────────────────────────────────────────────
 
 export default function Reactions({ slug, initial }: ReactionsProps) {
   const [counts, setCounts] = useState(initial);
@@ -30,12 +90,11 @@ export default function Reactions({ slug, initial }: ReactionsProps) {
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
-    // Load persisted reactions for this post
     const key = `mw_reacted_${slug}`;
-    const saved = localStorage.getItem(key);
-    if (saved) {
-      try { setReacted(new Set(JSON.parse(saved))); } catch { /* */ }
-    }
+    try {
+      const saved = localStorage.getItem(key);
+      if (saved) setReacted(new Set(JSON.parse(saved)));
+    } catch { /* */ }
     setReady(true);
   }, [slug]);
 
@@ -47,10 +106,12 @@ export default function Reactions({ slug, initial }: ReactionsProps) {
     setCounts((prev) => ({ ...prev, [type]: prev[type] + 1 }));
     const next = new Set([...reacted, type]);
     setReacted(next);
-    localStorage.setItem(`mw_reacted_${slug}`, JSON.stringify([...next]));
+    try { localStorage.setItem(`mw_reacted_${slug}`, JSON.stringify([...next])); } catch { /* */ }
 
     try {
-      const voterId = getOrCreateVoterId();
+      // Use the stable device fingerprint — not a per-localStorage UUID
+      const voterId = await getDeviceFingerprint();
+
       const res = await fetch(`/api/posts/${slug}/reactions`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -59,18 +120,18 @@ export default function Reactions({ slug, initial }: ReactionsProps) {
       const data = await res.json();
 
       if (res.status === 409) {
-        // Already voted server-side — just sync the state, counts stay
+        // Already voted server-side — sync state, don't rollback UI
         return;
       }
       if (res.ok) {
         setCounts(data.reactions);
       } else {
-        // Rollback
+        // Rollback on genuine error
         setCounts((prev) => ({ ...prev, [type]: Math.max(0, prev[type] - 1) }));
         const rolled = new Set(reacted);
         rolled.delete(type);
         setReacted(rolled);
-        localStorage.setItem(`mw_reacted_${slug}`, JSON.stringify([...rolled]));
+        try { localStorage.setItem(`mw_reacted_${slug}`, JSON.stringify([...rolled])); } catch { /* */ }
       }
     } finally {
       setLoading(null);
@@ -122,7 +183,7 @@ export default function Reactions({ slug, initial }: ReactionsProps) {
         );
       })}
       <span style={{ fontSize: "0.6875rem", color: "var(--fg-subtle)", marginLeft: "auto" }}>
-        One reaction per person
+        One reaction per device
       </span>
     </div>
   );

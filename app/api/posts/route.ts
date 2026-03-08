@@ -34,7 +34,7 @@ export async function GET(req: NextRequest) {
     if (tag) query.tags = tag;
 
     const posts = await Post.find(query)
-      .select("title slug excerpt coverImage tags published featured mood location readingTime viewCount reactions scheduledAt createdAt")
+      .select("title slug excerpt coverImage tags published featured mood location readingTime viewCount reactions scheduledAt shareToken createdAt")
       .sort({ featured: -1, createdAt: -1 })
       .lean();
 

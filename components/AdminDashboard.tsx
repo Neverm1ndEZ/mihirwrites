@@ -9,6 +9,7 @@ interface Post {
   published: boolean; createdAt: string; tags: string[];
   viewCount?: number; featured?: boolean;
   reactions?: { like: number; heart: number; fire: number };
+  shareToken?: string;
 }
 
 interface Comment {
@@ -135,6 +136,31 @@ export default function AdminDashboard() {
     if (res.ok) setPosts(posts.map((p) => p.slug === post.slug ? { ...p, featured: !p.featured } : p));
   }
 
+  async function handleShare(post: Post) {
+    if (post.shareToken) {
+      // Copy existing link
+      const url = `${window.location.origin}/post/${post.slug}?token=${post.shareToken}`;
+      await navigator.clipboard.writeText(url).catch(() => {});
+      alert(`Share link copied!\n\n${url}`);
+      return;
+    }
+    // Generate a new token
+    const res = await fetch(`/api/posts/${post.slug}/share`, { method: "POST" });
+    if (res.ok) {
+      const { token } = await res.json();
+      const url = `${window.location.origin}/post/${post.slug}?token=${token}`;
+      setPosts(posts.map((p) => p.slug === post.slug ? { ...p, shareToken: token } : p));
+      await navigator.clipboard.writeText(url).catch(() => {});
+      alert(`Share link generated and copied!\n\n${url}`);
+    }
+  }
+
+  async function revokeShare(post: Post) {
+    if (!confirm("Revoke this share link? Anyone with the old link won't be able to access the draft.")) return;
+    const res = await fetch(`/api/posts/${post.slug}/share`, { method: "DELETE" });
+    if (res.ok) setPosts(posts.map((p) => p.slug === post.slug ? { ...p, shareToken: undefined } : p));
+  }
+
   async function handleBulk() {
     if (!bulkOp || !selected.size) return;
     if (!confirm(`${bulkOp} ${selected.size} post(s)?`)) return;
@@ -245,6 +271,21 @@ export default function AdminDashboard() {
                         <Link href={`/post/${post.slug}`} target="_blank" className="btn btn-ghost" style={{ padding: "0.375rem 0.75rem", fontSize: "0.8125rem" }}>View</Link>
                         <button onClick={() => togglePublish(post)} className="btn btn-ghost" style={{ padding: "0.375rem 0.75rem", fontSize: "0.8125rem" }}>{post.published ? "Unpublish" : "Publish"}</button>
                         <button onClick={() => toggleFeatured(post)} className="btn btn-ghost" style={{ padding: "0.375rem 0.75rem", fontSize: "0.8125rem" }}>{post.featured ? "Unfeature" : "Feature"}</button>
+                        {!post.published && (
+                          <button
+                            onClick={() => handleShare(post)}
+                            title={post.shareToken ? "Copy share link" : "Generate share link"}
+                            className="btn btn-ghost"
+                            style={{ padding: "0.375rem 0.75rem", fontSize: "0.8125rem", color: post.shareToken ? "var(--accent)" : undefined }}
+                          >
+                            {post.shareToken ? "🔗 Copy link" : "🔗 Share"}
+                          </button>
+                        )}
+                        {!post.published && post.shareToken && (
+                          <button onClick={() => revokeShare(post)} className="btn btn-ghost" style={{ padding: "0.375rem 0.75rem", fontSize: "0.8125rem", color: "#dc2626" }} title="Revoke share link">
+                            Revoke
+                          </button>
+                        )}
                         <Link href={`/admin/edit/${post.slug}`} className="btn btn-ghost" style={{ padding: "0.375rem 0.75rem", fontSize: "0.8125rem" }}>Edit</Link>
                         <button onClick={() => handleDelete(post.slug, post.title)} disabled={deleting === post.slug} className="btn btn-danger" style={{ padding: "0.375rem 0.75rem", fontSize: "0.8125rem" }}>
                           {deleting === post.slug ? "…" : "Delete"}

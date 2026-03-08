@@ -85,7 +85,7 @@ export default async function YearInReviewPage({ params }: { params: Promise<{ y
   const data = await getYearData(year);
 
   const currentYear = new Date().getFullYear();
-  const years = Array.from({ length: Math.min(5, currentYear - 2023) }, (_, i) => currentYear - i);
+  const years = Array.from({ length: Math.min(5, currentYear - 2025) }, (_, i) => currentYear - i);
 
   return (
     <div style={{ maxWidth: "800px", margin: "0 auto", padding: "2rem 1.5rem 5rem" }}>

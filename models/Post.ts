@@ -18,6 +18,7 @@ export interface IPost extends Document {
   coverImage?: string;
   tags: string[];
   published: boolean;
+  shareToken?: string; // private share token for unpublished posts
   deletedAt?: Date;
   // Content & Writing
   readingTime: number;
@@ -49,6 +50,7 @@ const PostSchema = new Schema<IPost>(
     coverImage: { type: String },
     tags: [{ type: String, trim: true }],
     published: { type: Boolean, default: true },
+    shareToken: { type: String, default: null, index: { sparse: true } },
     deletedAt: { type: Date, default: null },
     // Content & Writing
     readingTime: { type: Number, default: 1 },

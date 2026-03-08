@@ -25,6 +25,7 @@ export default function Navbar() {
   const links = [
     { href: "/threads", label: "Threads" },
     { href: "/constellation", label: "✦ Map" },
+    { href: "/graph", label: "⬡ Graph" },
     { href: `/year/${new Date().getFullYear()}`, label: "Year" },
     { href: "/admin", label: "Admin" },
   ];

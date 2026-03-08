@@ -10,14 +10,19 @@ import ReadingProgress from "@/components/ReadingProgress";
 import BackToTop from "@/components/BackToTop";
 import ViewTracker from "@/components/ViewTracker";
 import AmbientPlayer from "@/components/AmbientPlayer";
+import ReaderMoodMode from "@/components/ReaderMoodMode";
 import SubscribeWidget from "@/components/SubscribeWidget";
 import connectDB from "@/lib/mongodb";
 import PostModel from "@/models/Post";
 import CommentModel from "@/models/Comment";
 
+// Always server-render — never cache, so searchParams (share token) is always read fresh
+export const dynamic = "force-dynamic";
+
 interface PostItem {
   _id: string; title: string; slug: string; excerpt: string; content: string;
   coverImage?: string; tags: string[]; createdAt: string; updatedAt: string;
+  published: boolean; shareToken?: string;
   readingTime?: number; mood?: string; location?: string; voiceIntroUrl?: string; ambientTrackUrl?: string;
   timeCapsuleUnlockAt?: string;
   reactions: { like: number; heart: number; fire: number };
@@ -30,16 +35,36 @@ interface CommentItem {
   parentId?: string | null; createdAt: string;
 }
 
-async function getPost(slug: string) {
+async function getPost(slug: string, token?: string) {
   try {
     await connectDB();
-    const post = await PostModel.findOne({ slug, published: true, deletedAt: null }).lean();
+
+    let post = null;
+
+    if (token) {
+      // Try token-gated access first (unpublished draft with matching token)
+      post = await PostModel.findOne({
+        slug,
+        shareToken: token,
+        deletedAt: { $in: [null, undefined] },
+      }).lean();
+    }
+
+    // Fall back to normal published lookup
+    if (!post) {
+      post = await PostModel.findOne({
+        slug,
+        published: true,
+        deletedAt: { $in: [null, undefined] },
+      }).lean();
+    }
+
+    if (!post) return null;
     if (!post) return null;
     const comments = await CommentModel.find({ postSlug: slug }).sort({ createdAt: 1 }).lean();
 
-    // Related posts (same tags)
     let related: { title: string; slug: string; excerpt: string }[] = [];
-    if (post.tags?.length) {
+    if (post.tags?.length && post.published) {
       const rel = await PostModel.find({
         slug: { $ne: slug }, published: true, deletedAt: null,
         tags: { $in: post.tags },
@@ -59,7 +84,8 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   return {
     title: data.post.title,
     description: data.post.excerpt,
-    alternates: { canonical: `${siteUrl}/post/${data.post.slug}` },
+    robots: data.post.published ? undefined : { index: false, follow: false },
+    alternates: data.post.published ? { canonical: `${siteUrl}/post/${data.post.slug}` } : undefined,
     openGraph: {
       title: data.post.title, description: data.post.excerpt,
       type: "article", url: `${siteUrl}/post/${data.post.slug}`,
@@ -78,12 +104,21 @@ const MOOD_EMOJIS: Record<string, string> = {
   curious: "🔍", nostalgic: "🌅", excited: "⚡", reflective: "🌊", lost: "🌑", angry: "🔥",
 };
 
-export default async function PostPage({ params }: { params: Promise<{ slug: string }> }) {
+export default async function PostPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ slug: string }>;
+  searchParams: Promise<{ token?: string }>;
+}) {
   const { slug } = await params;
-  const data = await getPost(slug);
+  const { token } = await searchParams;
+  const data = await getPost(slug, token);
   if (!data) notFound();
 
   const { post, comments, related }: { post: PostItem; comments: CommentItem[]; related: { title: string; slug: string; excerpt: string }[] } = data;
+
+  const isPreview = !post.published && !!token;
 
   // Time capsule: locked?
   const isLocked = post.timeCapsuleUnlockAt && new Date(post.timeCapsuleUnlockAt) > new Date();
@@ -104,7 +139,30 @@ export default async function PostPage({ params }: { params: Promise<{ slug: str
       <ReadingProgress />
       <BackToTop />
       <AmbientPlayer customTrackUrl={post.ambientTrackUrl} />
-      <ViewTracker slug={post.slug} />
+      <ReaderMoodMode />
+      {post.published && <ViewTracker slug={post.slug} />}
+
+      {/* Draft preview banner */}
+      {isPreview && (
+        <div style={{
+          background: "color-mix(in srgb, #f59e0b 12%, var(--bg))",
+          border: "1px solid #f59e0b",
+          borderRadius: "10px",
+          padding: "0.75rem 1.25rem",
+          marginBottom: "2rem",
+          display: "flex",
+          alignItems: "center",
+          gap: "0.75rem",
+          fontSize: "0.875rem",
+          color: "var(--fg)",
+        }}>
+          <span style={{ fontSize: "1.25rem" }}>🔒</span>
+          <div>
+            <strong style={{ fontWeight: 600 }}>Draft preview</strong>
+            <span style={{ color: "var(--fg-muted)", marginLeft: "0.5rem" }}>This post isn't published yet. Only people with this link can see it.</span>
+          </div>
+        </div>
+      )}
 
       {/* Back link */}
       <Link href="/" style={{ display: "inline-flex", alignItems: "center", gap: "0.375rem", color: "var(--fg-muted)", fontSize: "0.875rem", textDecoration: "none", marginBottom: "2.5rem", transition: "color 0.15s" }} className="animate-fade-in">
@@ -174,11 +232,13 @@ export default async function PostPage({ params }: { params: Promise<{ slug: str
         </p>
       )}
 
-      {/* Reactions */}
-      <Reactions slug={post.slug} initial={post.reactions || { like: 0, heart: 0, fire: 0 }} />
+      {/* Reactions — only on published posts */}
+      {post.published && (
+        <Reactions slug={post.slug} initial={post.reactions || { like: 0, heart: 0, fire: 0 }} />
+      )}
 
       {/* Hire me CTA */}
-      {process.env.NEXT_PUBLIC_HIRE_ME === "true" && (
+      {post.published && process.env.NEXT_PUBLIC_HIRE_ME === "true" && (
         <div style={{ marginTop: "2.5rem", padding: "1.25rem 1.5rem", background: "var(--bg-secondary)", border: "1px solid var(--border)", borderRadius: "12px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: "1rem", flexWrap: "wrap" }}>
           <div>
             <p style={{ fontWeight: 600, color: "var(--fg)", fontSize: "0.9375rem", marginBottom: "0.25rem" }}>Available for freelance work</p>
@@ -190,8 +250,8 @@ export default async function PostPage({ params }: { params: Promise<{ slug: str
         </div>
       )}
 
-      {/* Related posts */}
-      {related.length > 0 && (
+      {/* Related posts — only on published */}
+      {post.published && related.length > 0 && (
         <div style={{ marginTop: "3rem", paddingTop: "2rem", borderTop: "1px solid var(--border)" }}>
           <h3 style={{ fontSize: "0.875rem", fontWeight: 600, color: "var(--fg-subtle)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "1.25rem" }}>Related posts</h3>
           <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
@@ -207,10 +267,12 @@ export default async function PostPage({ params }: { params: Promise<{ slug: str
         </div>
       )}
 
-      <SubscribeWidget />
+      {post.published && <SubscribeWidget />}
 
-      {/* Comments */}
-      <CommentSection slug={post.slug} initialComments={comments} />
+      {/* Comments — only on published */}
+      {post.published && (
+        <CommentSection slug={post.slug} initialComments={comments} />
+      )}
     </article>
   );
 }

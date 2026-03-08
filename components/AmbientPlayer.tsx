@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 
 const DEFAULT_TRACKS = [
   { label: "Late Night", url: "https://www.youtube.com/watch?v=qSi_E1m4wM0" },
@@ -11,74 +11,25 @@ interface AmbientPlayerProps {
   customTrackUrl?: string;
 }
 
-// ── URL classifiers ──────────────────────────────────────────────
-
 type TrackType = "audio" | "youtube" | "spotify" | "soundcloud" | "applemusic" | "unknown";
 
 function sanitizeUrl(url: string): string {
-  // Strip any accidental backticks, quotes, whitespace
-  return url.replace(/^[`'"]+|[`'"]+$/g, "").trim();
+  return url.replace(/^[`'\"]+|[`'\"]+$/g, "").trim();
 }
 
 function classifyUrl(raw: string): { type: TrackType; url: string; embedUrl?: string } {
   const url = sanitizeUrl(raw);
-
-  // Direct audio
-  if (/\.(mp3|wav|ogg|flac|aac|m4a|opus)(\?|$)/i.test(url)) {
-    return { type: "audio", url };
-  }
-
-  // YouTube
-  const ytMatch = url.match(
-    /(?:youtube\.com\/(?:watch\?.*v=|embed\/|shorts\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})/
-  );
-  if (ytMatch) {
-    return {
-      type: "youtube",
-      url,
-      embedUrl: `https://www.youtube.com/embed/${ytMatch[1]}?autoplay=1&loop=1&playlist=${ytMatch[1]}&controls=0&enablejsapi=1`,
-    };
-  }
-
-  // Spotify
+  if (/\.(mp3|wav|ogg|flac|aac|m4a|opus)(\?|$)/i.test(url)) return { type: "audio", url };
+  const ytMatch = url.match(/(?:youtube\.com\/(?:watch\?.*v=|embed\/|shorts\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})/);
+  if (ytMatch) return { type: "youtube", url, embedUrl: `https://www.youtube.com/embed/${ytMatch[1]}?autoplay=1&loop=1&playlist=${ytMatch[1]}&controls=0&enablejsapi=1` };
   const spotifyMatch = url.match(/spotify\.com\/(track|album|playlist|episode)\/([a-zA-Z0-9]+)/);
-  if (spotifyMatch) {
-    return {
-      type: "spotify",
-      url,
-      embedUrl: `https://open.spotify.com/embed/${spotifyMatch[1]}/${spotifyMatch[2]}?utm_source=generator&theme=0`,
-    };
-  }
-
-  // SoundCloud
-  if (url.includes("soundcloud.com")) {
-    return {
-      type: "soundcloud",
-      url,
-      embedUrl: `https://w.soundcloud.com/player/?url=${encodeURIComponent(url)}&color=%23e8a23a&auto_play=true&hide_related=true&show_comments=false&show_user=false&show_reposts=false`,
-    };
-  }
-
-  // Apple Music
+  if (spotifyMatch) return { type: "spotify", url, embedUrl: `https://open.spotify.com/embed/${spotifyMatch[1]}/${spotifyMatch[2]}?utm_source=generator&theme=0` };
+  if (url.includes("soundcloud.com")) return { type: "soundcloud", url, embedUrl: `https://w.soundcloud.com/player/?url=${encodeURIComponent(url)}&color=%23e8a23a&auto_play=true&hide_related=true&show_comments=false&show_user=false&show_reposts=false` };
   const appleMatch = url.match(/music\.apple\.com\/([a-z]+)\/(album|song|playlist)\/[^/]+\/([0-9]+)/);
-  if (appleMatch) {
-    return {
-      type: "applemusic",
-      url,
-      embedUrl: `https://embed.music.apple.com/${appleMatch[1]}/${appleMatch[2]}/${appleMatch[3]}`,
-    };
-  }
-
-  // Cloudinary or other CDN - try as audio
-  if (url.includes("cloudinary.com") || url.includes("res.cloudinary")) {
-    return { type: "audio", url };
-  }
-
-  // Unknown - attempt audio
+  if (appleMatch) return { type: "applemusic", url, embedUrl: `https://embed.music.apple.com/${appleMatch[1]}/${appleMatch[2]}/${appleMatch[3]}` };
+  if (url.includes("cloudinary.com") || url.includes("res.cloudinary")) return { type: "audio", url };
   return { type: "unknown", url };
 }
-
-// ── YouTube IFrame API ───────────────────────────────────────────
 
 declare global {
   interface Window {
@@ -86,13 +37,21 @@ declare global {
       Player: new (el: HTMLElement, opts: {
         videoId: string;
         playerVars: Record<string, number | string>;
-        events: { onReady?: () => void };
+        events: { onReady?: () => void; onStateChange?: (e: { data: number }) => void };
       }) => YTPlayer;
     };
     onYouTubeIframeAPIReady?: () => void;
   }
 }
-interface YTPlayer { playVideo(): void; pauseVideo(): void; setVolume(v: number): void; destroy(): void; }
+interface YTPlayer {
+  playVideo(): void;
+  pauseVideo(): void;
+  setVolume(v: number): void;
+  destroy(): void;
+  getDuration(): number;
+  getCurrentTime(): number;
+  seekTo(seconds: number, allowSeekAhead: boolean): void;
+}
 
 function loadYTApi(): Promise<void> {
   return new Promise((resolve) => {
@@ -107,7 +66,12 @@ function loadYTApi(): Promise<void> {
   });
 }
 
-// ── Component ────────────────────────────────────────────────────
+function fmtTime(s: number) {
+  if (!isFinite(s) || isNaN(s) || s < 0) return "0:00";
+  const m = Math.floor(s / 60);
+  const sec = Math.floor(s % 60);
+  return `${m}:${sec.toString().padStart(2, "0")}`;
+}
 
 export default function AmbientPlayer({ customTrackUrl }: AmbientPlayerProps) {
   const [expanded, setExpanded] = useState(false);
@@ -117,11 +81,27 @@ export default function AmbientPlayer({ customTrackUrl }: AmbientPlayerProps) {
   const [mounted, setMounted] = useState(false);
   const [error, setError] = useState("");
 
+  // Seek / progress — works for both audio and YT
+  const [currentTime, setCurrentTime] = useState(0);
+  const [duration, setDuration] = useState(0);
+
+  // A-B Loop
+  const [loopA, setLoopA] = useState<number | null>(null);
+  const [loopB, setLoopB] = useState<number | null>(null);
+  const [loopActive, setLoopActive] = useState(false);
+  const [settingLoop, setSettingLoop] = useState<"A" | "B" | null>(null);
+
+  // Crossfade (audio only)
+  const [crossfadeDuration, setCrossfadeDuration] = useState(3);
+  const [crossfadeEnabled, setCrossfadeEnabled] = useState(true);
+
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const nextAudioRef = useRef<HTMLAudioElement | null>(null);
   const ytPlayerRef = useRef<YTPlayer | null>(null);
   const ytMountRef = useRef<HTMLDivElement | null>(null);
-  // For embed-based players (Spotify, SoundCloud, Apple Music), we use a hidden iframe
   const embedIframeRef = useRef<HTMLIFrameElement | null>(null);
+  const progressInterval = useRef<ReturnType<typeof setInterval> | null>(null);
+  const isCrossfading = useRef(false);
 
   const tracks = customTrackUrl
     ? [{ label: "Author's pick", url: sanitizeUrl(customTrackUrl) }, ...DEFAULT_TRACKS]
@@ -131,30 +111,96 @@ export default function AmbientPlayer({ customTrackUrl }: AmbientPlayerProps) {
   const usesEmbed = ["spotify", "soundcloud", "applemusic"].includes(track.type);
   const isYT = track.type === "youtube";
   const isAudio = track.type === "audio" || track.type === "unknown";
+  // Seeking/looping supported for audio and YT
+  const supportsSeek = isAudio || isYT;
 
   useEffect(() => { setMounted(true); }, []);
   useEffect(() => () => {
     audioRef.current?.pause();
     ytPlayerRef.current?.destroy();
+    if (progressInterval.current) clearInterval(progressInterval.current);
   }, []);
 
-  // When track changes
-  useEffect(() => {
-    if (!mounted) return;
-    stopAll(false);
-    if (playing) startTrack();
+  const startProgressPoll = useCallback(() => {
+    if (progressInterval.current) clearInterval(progressInterval.current);
+    progressInterval.current = setInterval(() => {
+      let cur = 0, dur = 0;
+
+      if (isAudio && audioRef.current) {
+        cur = audioRef.current.currentTime;
+        dur = audioRef.current.duration || 0;
+      } else if (isYT && ytPlayerRef.current) {
+        try {
+          cur = ytPlayerRef.current.getCurrentTime() || 0;
+          dur = ytPlayerRef.current.getDuration() || 0;
+        } catch { return; }
+      }
+
+      setCurrentTime(cur);
+      if (dur > 0) setDuration(dur);
+
+      // A-B loop
+      if (loopActive && loopA !== null && loopB !== null && cur >= loopB) {
+        if (isAudio && audioRef.current) audioRef.current.currentTime = loopA;
+        else if (isYT && ytPlayerRef.current) ytPlayerRef.current.seekTo(loopA, true);
+      }
+
+      // Crossfade (audio only — near end of track)
+      if (isAudio && crossfadeEnabled && dur > 0 && cur >= dur - crossfadeDuration && !isCrossfading.current) {
+        startCrossfade();
+      }
+    }, 300);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [trackIdx, mounted]);
+  }, [isAudio, isYT, loopActive, loopA, loopB, crossfadeEnabled, crossfadeDuration]);
+
+  useEffect(() => {
+    if (playing && supportsSeek) startProgressPoll();
+    else if (progressInterval.current) clearInterval(progressInterval.current);
+  }, [playing, supportsSeek, startProgressPoll]);
 
   function stopAll(updateState = true) {
     audioRef.current?.pause();
     ytPlayerRef.current?.pauseVideo();
+    if (progressInterval.current) clearInterval(progressInterval.current);
+    isCrossfading.current = false;
     if (updateState) setPlaying(false);
+  }
+
+  function startCrossfade() {
+    if (!isAudio || !audioRef.current) return;
+    isCrossfading.current = true;
+    const nextIdx = (trackIdx + 1) % tracks.length;
+    const nextTrack = classifyUrl(tracks[nextIdx].url);
+    if (nextTrack.type !== "audio" && nextTrack.type !== "unknown") {
+      goToNext(); return;
+    }
+    const nextAudio = new Audio(nextTrack.url);
+    nextAudio.volume = 0;
+    nextAudio.play().catch(() => {});
+    nextAudioRef.current = nextAudio;
+    const steps = 20;
+    const stepDuration = (crossfadeDuration * 1000) / steps;
+    let step = 0;
+    const fade = setInterval(() => {
+      step++;
+      const ratio = step / steps;
+      if (audioRef.current) audioRef.current.volume = Math.max(0, (volume / 100) * (1 - ratio));
+      if (nextAudio) nextAudio.volume = Math.min(volume / 100, (volume / 100) * ratio);
+      if (step >= steps) {
+        clearInterval(fade);
+        audioRef.current?.pause();
+        audioRef.current = nextAudio;
+        nextAudioRef.current = null;
+        audioRef.current.volume = volume / 100;
+        audioRef.current.loop = true;
+        setTrackIdx(nextIdx);
+        isCrossfading.current = false;
+      }
+    }, stepDuration);
   }
 
   async function startTrack() {
     setError("");
-
     if (isYT) {
       const ytMatch = track.url.match(/(?:watch\?.*v=|embed\/|youtu\.be\/)([a-zA-Z0-9_-]{11})/);
       if (!ytMatch) { setError("Invalid YouTube URL"); return; }
@@ -163,7 +209,6 @@ export default function AmbientPlayer({ customTrackUrl }: AmbientPlayerProps) {
       ytPlayerRef.current?.destroy();
       ytPlayerRef.current = null;
       if (!ytMountRef.current) return;
-      // Clear the container so YT can re-init
       ytMountRef.current.innerHTML = "";
       const el = document.createElement("div");
       ytMountRef.current.appendChild(el);
@@ -175,6 +220,11 @@ export default function AmbientPlayer({ customTrackUrl }: AmbientPlayerProps) {
             ytPlayerRef.current?.setVolume(volume);
             ytPlayerRef.current?.playVideo();
             setPlaying(true);
+            // Give YT a moment to load duration
+            setTimeout(() => {
+              const dur = ytPlayerRef.current?.getDuration() || 0;
+              if (dur > 0) setDuration(dur);
+            }, 1500);
           },
         },
       });
@@ -182,57 +232,89 @@ export default function AmbientPlayer({ customTrackUrl }: AmbientPlayerProps) {
       if (!audioRef.current) audioRef.current = new Audio();
       audioRef.current.src = track.url;
       audioRef.current.volume = volume / 100;
-      audioRef.current.loop = true;
-      audioRef.current.onerror = () => setError("Can't play this URL directly. Try uploading to Cloudinary.");
+      audioRef.current.loop = !crossfadeEnabled;
+      audioRef.current.onerror = () => setError("Can't play this URL. Try uploading to Cloudinary.");
+      audioRef.current.onloadedmetadata = () => {
+        setDuration(audioRef.current?.duration || 0);
+      };
       audioRef.current.play()
         .then(() => setPlaying(true))
         .catch(() => setError("Playback blocked. Try clicking Play again."));
     } else if (usesEmbed) {
-      // Embed players auto-play via their src — just show the iframe and signal playing
       setPlaying(true);
     }
   }
 
+  function goToNext() {
+    const nextIdx = (trackIdx + 1) % tracks.length;
+    stopAll(false);
+    setCurrentTime(0); setDuration(0);
+    setLoopA(null); setLoopB(null); setLoopActive(false);
+    setTrackIdx(nextIdx);
+  }
+
+  useEffect(() => {
+    if (!mounted) return;
+    stopAll(false);
+    setCurrentTime(0); setDuration(0);
+    if (playing) startTrack();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [trackIdx, mounted]);
+
   async function togglePlay() {
-    if (playing) {
-      stopAll(true);
-    } else {
-      await startTrack();
-    }
+    if (playing) stopAll(true);
+    else await startTrack();
   }
 
   function applyVolume(v: number) {
     setVolume(v);
     if (audioRef.current) audioRef.current.volume = v / 100;
     ytPlayerRef.current?.setVolume(v);
+    if (nextAudioRef.current) nextAudioRef.current.volume = v / 100;
   }
 
-  const typeLabel: Record<TrackType, string> = {
-    audio: "", youtube: "YT", spotify: "SPTFY", soundcloud: "SC", applemusic: "AM", unknown: "",
-  };
-  const typeBg: Record<TrackType, string> = {
-    audio: "", youtube: "#ff0000", spotify: "#1DB954", soundcloud: "#ff5500", applemusic: "#fc3c44", unknown: "",
-  };
+  function handleSeek(e: React.ChangeEvent<HTMLInputElement>) {
+    const val = Number(e.target.value);
+    setCurrentTime(val);
+    if (isAudio && audioRef.current) audioRef.current.currentTime = val;
+    else if (isYT && ytPlayerRef.current) ytPlayerRef.current.seekTo(val, true);
+  }
+
+  function setLoopPoint(point: "A" | "B") {
+    const cur = isYT
+      ? (ytPlayerRef.current?.getCurrentTime() ?? currentTime)
+      : (audioRef.current?.currentTime ?? currentTime);
+    if (point === "A") {
+      setLoopA(cur); setLoopB(null); setLoopActive(false);
+    } else {
+      if (loopA === null || cur <= loopA) return;
+      setLoopB(cur); setLoopActive(true);
+    }
+    setSettingLoop(null);
+  }
+
+  function clearLoop() {
+    setLoopA(null); setLoopB(null); setLoopActive(false); setSettingLoop(null);
+  }
+
+  const typeLabel: Record<TrackType, string> = { audio: "", youtube: "YT", spotify: "SPTFY", soundcloud: "SC", applemusic: "AM", unknown: "" };
+  const typeBg: Record<TrackType, string> = { audio: "", youtube: "#ff0000", spotify: "#1DB954", soundcloud: "#ff5500", applemusic: "#fc3c44", unknown: "" };
 
   if (!mounted) return null;
 
+  const loopProgress = duration > 0 && loopA !== null && loopB !== null
+    ? { left: `${(loopA / duration) * 100}%`, width: `${((loopB - loopA) / duration) * 100}%` }
+    : null;
+
   return (
     <>
-      {/* Hidden YT mount */}
       <div style={{ position: "fixed", left: "-9999px", top: 0, width: "1px", height: "1px", overflow: "hidden" }} aria-hidden>
         <div ref={ytMountRef} />
       </div>
 
-      {/* Hidden embed iframe for Spotify/SC/Apple */}
       {usesEmbed && playing && track.embedUrl && (
-        <iframe
-          ref={embedIframeRef}
-          src={track.embedUrl}
-          allow="autoplay; encrypted-media"
-          style={{ position: "fixed", left: "-9999px", top: 0, width: "1px", height: "1px" }}
-          title="ambient"
-          aria-hidden
-        />
+        <iframe ref={embedIframeRef} src={track.embedUrl} allow="autoplay; encrypted-media"
+          style={{ position: "fixed", left: "-9999px", top: 0, width: "1px", height: "1px" }} title="ambient" aria-hidden />
       )}
 
       <div style={{ position: "fixed", bottom: "1.5rem", left: "1.5rem", zIndex: 90, display: "flex", flexDirection: "column", alignItems: "flex-start" }}>
@@ -240,54 +322,153 @@ export default function AmbientPlayer({ customTrackUrl }: AmbientPlayerProps) {
           <div style={{
             background: "var(--bg-card, var(--bg-secondary))",
             border: "1px solid var(--border)",
-            borderRadius: "12px",
-            padding: "0.875rem 1rem",
+            borderRadius: "14px",
+            padding: "1rem 1.125rem",
             marginBottom: "0.5rem",
             boxShadow: "var(--shadow-lg)",
-            minWidth: "210px",
+            width: "280px",
           }}>
-            <div style={{ fontSize: "0.6875rem", color: "var(--fg-subtle)", marginBottom: "0.625rem", fontWeight: 500, textTransform: "uppercase", letterSpacing: "0.05em" }}>
-              Ambient
-            </div>
-            <div style={{ fontSize: "0.8125rem", color: "var(--fg)", fontWeight: 500, marginBottom: "0.625rem", display: "flex", alignItems: "center", gap: "0.375rem" }}>
+            {/* Header */}
+            <div style={{ fontSize: "0.6875rem", color: "var(--fg-subtle)", marginBottom: "0.625rem", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em" }}>Ambient</div>
+
+            {/* Track name */}
+            <div style={{ fontSize: "0.8125rem", color: "var(--fg)", fontWeight: 500, marginBottom: "0.875rem", display: "flex", alignItems: "center", gap: "0.375rem" }}>
               {playing && <span style={{ animation: "ambientPulse 2s ease infinite", display: "inline-block" }}>♪</span>}
               {tracks[trackIdx].label}
               {typeLabel[track.type] && (
-                <span style={{ fontSize: "0.5625rem", background: typeBg[track.type], color: "#fff", borderRadius: "3px", padding: "1px 4px", fontWeight: 700, letterSpacing: "0.03em" }}>
+                <span style={{ fontSize: "0.5625rem", background: typeBg[track.type], color: "#fff", borderRadius: "3px", padding: "1px 4px", fontWeight: 700 }}>
                   {typeLabel[track.type]}
                 </span>
               )}
             </div>
 
-            {/* Volume — only meaningful for audio/yt */}
+            {/* ── Seek bar — audio AND youtube ── */}
+            {supportsSeek && (
+              <div style={{ marginBottom: "0.875rem" }}>
+                <div style={{ position: "relative", marginBottom: "0.375rem" }}>
+                  {/* A-B region highlight */}
+                  {loopProgress && duration > 0 && (
+                    <div style={{
+                      position: "absolute", top: "50%", transform: "translateY(-50%)",
+                      height: "4px", pointerEvents: "none",
+                      left: loopProgress.left, width: loopProgress.width,
+                      background: "var(--accent)", opacity: 0.45, borderRadius: "2px", zIndex: 1,
+                    }} />
+                  )}
+                  <input
+                    type="range" min={0} max={duration || 100} step={1}
+                    value={currentTime}
+                    onChange={handleSeek}
+                    disabled={duration === 0}
+                    style={{ width: "100%", accentColor: "var(--accent)", cursor: duration > 0 ? "pointer" : "default", display: "block" }}
+                  />
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.6875rem", color: "var(--fg-subtle)" }}>
+                  <span>{fmtTime(currentTime)}</span>
+                  <span>{duration > 0 ? fmtTime(duration) : (isYT ? "loading…" : "--:--")}</span>
+                </div>
+              </div>
+            )}
+
+            {/* ── Volume ── */}
             {!usesEmbed && (
-              <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.75rem" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.875rem" }}>
                 <span style={{ fontSize: "0.75rem", color: "var(--fg-subtle)" }}>🔈</span>
-                <input
-                  type="range" min="0" max="100" step="5" value={volume}
+                <input type="range" min="0" max="100" step="5" value={volume}
                   onChange={(e) => applyVolume(Number(e.target.value))}
-                  style={{ width: "100px", accentColor: "var(--accent)", cursor: "pointer" }}
-                />
-                <span style={{ fontSize: "0.75rem", color: "var(--fg-subtle)" }}>🔊</span>
+                  style={{ flex: 1, accentColor: "var(--accent)", cursor: "pointer" }} />
+                <span style={{ fontSize: "0.6875rem", color: "var(--fg-subtle)", minWidth: "28px" }}>{volume}%</span>
+              </div>
+            )}
+
+            {/* ── A-B Loop — audio AND youtube ── */}
+            {supportsSeek && (
+              <div style={{ marginBottom: "0.875rem", padding: "0.625rem 0.75rem", background: "var(--bg)", border: "1px solid var(--border)", borderRadius: "10px" }}>
+                <div style={{ fontSize: "0.6875rem", color: "var(--fg-subtle)", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "0.5rem" }}>
+                  A-B Loop {loopActive && <span style={{ color: "var(--accent)" }}>● active</span>}
+                </div>
+                <div style={{ display: "flex", gap: "0.375rem", flexWrap: "wrap" }}>
+                  <button
+                    onClick={() => settingLoop === "A" ? setLoopPoint("A") : setSettingLoop("A")}
+                    style={{
+                      padding: "0.25rem 0.625rem", borderRadius: "6px", fontSize: "0.75rem", fontWeight: 600, fontFamily: "inherit", cursor: "pointer",
+                      background: settingLoop === "A" ? "var(--accent)" : loopA !== null ? "color-mix(in srgb, var(--accent) 15%, var(--bg))" : "var(--bg-secondary)",
+                      color: settingLoop === "A" ? "#fff" : loopA !== null ? "var(--accent)" : "var(--fg-muted)",
+                      border: `1px solid ${loopA !== null ? "var(--accent)" : "var(--border)"}`,
+                    }}
+                  >
+                    {settingLoop === "A" ? "⏺ Tap A" : loopA !== null ? `A: ${fmtTime(loopA)}` : "Set A"}
+                  </button>
+                  <button
+                    onClick={() => { if (loopA !== null) settingLoop === "B" ? setLoopPoint("B") : setSettingLoop("B"); }}
+                    disabled={loopA === null && settingLoop !== "B"}
+                    style={{
+                      padding: "0.25rem 0.625rem", borderRadius: "6px", fontSize: "0.75rem", fontWeight: 600, fontFamily: "inherit", cursor: loopA !== null ? "pointer" : "not-allowed",
+                      background: settingLoop === "B" ? "var(--accent)" : loopB !== null ? "color-mix(in srgb, var(--accent) 15%, var(--bg))" : "var(--bg-secondary)",
+                      color: settingLoop === "B" ? "#fff" : loopB !== null ? "var(--accent)" : "var(--fg-muted)",
+                      border: `1px solid ${loopB !== null ? "var(--accent)" : "var(--border)"}`,
+                      opacity: loopA === null ? 0.45 : 1,
+                    }}
+                  >
+                    {settingLoop === "B" ? "⏺ Tap B" : loopB !== null ? `B: ${fmtTime(loopB)}` : "Set B"}
+                  </button>
+                  {(loopA !== null || loopB !== null) && (
+                    <button onClick={clearLoop} style={{ padding: "0.25rem 0.5rem", borderRadius: "6px", fontSize: "0.75rem", fontFamily: "inherit", cursor: "pointer", background: "transparent", border: "1px solid var(--border)", color: "var(--fg-subtle)" }}>✕</button>
+                  )}
+                  {loopA !== null && loopB !== null && (
+                    <button
+                      onClick={() => setLoopActive((v) => !v)}
+                      style={{
+                        padding: "0.25rem 0.625rem", borderRadius: "6px", fontSize: "0.75rem", fontWeight: 600, fontFamily: "inherit", cursor: "pointer",
+                        background: loopActive ? "var(--accent)" : "var(--bg-secondary)",
+                        color: loopActive ? "#fff" : "var(--fg-muted)",
+                        border: "1px solid var(--border)",
+                      }}
+                    >{loopActive ? "⟳ On" : "Loop"}</button>
+                  )}
+                </div>
+                {settingLoop && (
+                  <p style={{ fontSize: "0.6875rem", color: "var(--accent)", marginTop: "0.4rem", fontStyle: "italic" }}>
+                    Seek to your spot, then tap "Tap {settingLoop}" to mark it
+                  </p>
+                )}
+              </div>
+            )}
+
+            {/* ── Crossfade (audio only) ── */}
+            {isAudio && (
+              <div style={{ marginBottom: "0.875rem", padding: "0.625rem 0.75rem", background: "var(--bg)", border: "1px solid var(--border)", borderRadius: "10px" }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: crossfadeEnabled ? "0.5rem" : 0 }}>
+                  <label style={{ fontSize: "0.6875rem", color: "var(--fg-subtle)", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", cursor: "pointer", display: "flex", alignItems: "center", gap: "0.375rem" }}>
+                    <input type="checkbox" checked={crossfadeEnabled} onChange={(e) => {
+                      setCrossfadeEnabled(e.target.checked);
+                      if (audioRef.current) audioRef.current.loop = !e.target.checked;
+                    }} style={{ accentColor: "var(--accent)" }} />
+                    Crossfade
+                  </label>
+                  {crossfadeEnabled && <span style={{ fontSize: "0.6875rem", color: "var(--accent)", fontWeight: 600 }}>{crossfadeDuration}s</span>}
+                </div>
+                {crossfadeEnabled && (
+                  <input type="range" min={1} max={10} step={1} value={crossfadeDuration}
+                    onChange={(e) => setCrossfadeDuration(Number(e.target.value))}
+                    style={{ width: "100%", accentColor: "var(--accent)", cursor: "pointer" }} />
+                )}
               </div>
             )}
 
             {usesEmbed && playing && (
-              <p style={{ fontSize: "0.6875rem", color: "var(--fg-subtle)", margin: "0 0 0.625rem", fontStyle: "italic" }}>
-                Playing via embedded player
-              </p>
+              <p style={{ fontSize: "0.6875rem", color: "var(--fg-subtle)", marginBottom: "0.625rem", fontStyle: "italic" }}>Playing via embedded player</p>
             )}
 
-            {error && (
-              <p style={{ fontSize: "0.6875rem", color: "#dc2626", margin: "0 0 0.625rem" }}>{error}</p>
-            )}
+            {error && <p style={{ fontSize: "0.6875rem", color: "#dc2626", marginBottom: "0.625rem" }}>{error}</p>}
 
+            {/* Controls */}
             <div style={{ display: "flex", gap: "0.375rem" }}>
               <button onClick={togglePlay} className="btn btn-primary" style={{ padding: "0.3rem 0.875rem", fontSize: "0.875rem", flex: 1 }}>
                 {playing ? "⏸ Pause" : "▶ Play"}
               </button>
               <button
-                onClick={() => { stopAll(true); setTrackIdx((i) => (i + 1) % tracks.length); }}
+                onClick={goToNext}
                 className="btn btn-ghost"
                 style={{ padding: "0.3rem 0.625rem", fontSize: "0.875rem" }}
                 title="Next track"
