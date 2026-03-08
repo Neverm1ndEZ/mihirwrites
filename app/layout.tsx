@@ -3,6 +3,8 @@ import { Lora, DM_Sans } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import Navbar from "@/components/Navbar";
+import { Analytics } from "@vercel/analytics/next"
+import { SpeedInsights } from "@vercel/speed-insights/next"
 
 const lora = Lora({
   variable: "--font-lora",
@@ -65,6 +67,8 @@ export default function RootLayout({
         <ThemeProvider>
           <Navbar />
           <main>{children}</main>
+          <Analytics />
+          <SpeedInsights />
         </ThemeProvider>
       </body>
     </html>
