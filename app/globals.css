@@ -254,3 +254,152 @@ textarea.input { resize: vertical; min-height: 120px; }
   border-radius: 10px;
   margin: 1.5rem 0;
 }
+
+/* ─── Mobile Responsiveness ─── */
+@media (max-width: 640px) {
+  /* Base layout */
+  body { font-size: 15px; }
+
+  /* Post page */
+  article {
+    padding: 1.25rem 1rem 4rem !important;
+  }
+
+  /* Home page */
+  div[style*="maxWidth: \"800px\""],
+  div[style*="max-width: 800px"] {
+    padding: 1.5rem 1rem 4rem !important;
+  }
+
+  /* Prose content */
+  .prose {
+    font-size: 1rem;
+  }
+  .prose h1 { font-size: 1.625rem; }
+  .prose h2 { font-size: 1.25rem; }
+  .prose h3 { font-size: 1.125rem; }
+
+  /* Navbar */
+  .navbar-links span,
+  .navbar-links a[href="/admin"] {
+    display: none;
+  }
+}
+
+/* ─── Navbar mobile ─── */
+@media (max-width: 480px) {
+  .nav-link-label {
+    display: none;
+  }
+}
+
+/* ─── Post page responsive fixes ─── */
+@media (max-width: 600px) {
+  .post-meta-row {
+    flex-wrap: wrap;
+    gap: 0.5rem !important;
+  }
+  .post-title {
+    font-size: clamp(1.625rem, 7vw, 2.5rem) !important;
+  }
+  .cover-image-container {
+    height: clamp(160px, 45vw, 280px) !important;
+  }
+  .writing-replay-btn {
+    width: 100%;
+    justify-content: center;
+  }
+  /* Tag overflow on mobile */
+  .tag { font-size: 0.6875rem; padding: 0.15rem 0.5rem; }
+}
+
+/* ─── Thread page responsive ─── */
+@media (max-width: 600px) {
+  .threads-page {
+    padding: 1.25rem 1rem 4rem !important;
+  }
+}
+
+/* ─── Year page responsive ─── */
+@media (max-width: 600px) {
+  .year-grid {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+/* ─── Constellation page mobile ─── */
+@media (max-width: 600px) {
+  .constellation-canvas {
+    height: calc(100vh - 180px) !important;
+    min-height: 380px !important;
+  }
+}
+
+/* ─── Modal responsive ─── */
+@media (max-width: 520px) {
+  .writing-replay-modal {
+    max-height: 95vh !important;
+    border-radius: 12px !important;
+    margin: 0.5rem !important;
+  }
+}
+
+/* ─── Admin dashboard mobile ─── */
+@media (max-width: 768px) {
+  .admin-grid {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+/* ─── Better tap targets on mobile ─── */
+@media (max-width: 640px) {
+  .btn {
+    min-height: 38px;
+    padding: 0.5rem 0.875rem;
+  }
+  .tag { cursor: pointer; }
+  a, button { -webkit-tap-highlight-color: transparent; }
+}
+
+/* ─── Post article mobile ─── */
+@media (max-width: 600px) {
+  .post-article {
+    padding: 1.25rem 1rem 4rem !important;
+  }
+  .post-article h1 {
+    font-size: clamp(1.625rem, 7vw, 2.5rem) !important;
+  }
+}
+
+/* ─── Home page mobile ─── */
+@media (max-width: 600px) {
+  .home-page {
+    padding: 1.5rem 1rem 4rem !important;
+  }
+}
+
+/* ─── Core mobile fixes (post page) ─── */
+@media (max-width: 600px) {
+  .post-article {
+    padding: 1.25rem 1rem 4rem !important;
+  }
+  .home-page {
+    padding: 1.5rem 1rem 4rem !important;
+  }
+}
+
+/* ─── Reaction uniqueness reminder text ─── */
+@media (max-width: 420px) {
+  .reactions-footer-text { display: none; }
+}
+
+/* ─── Heatmap mobile ─── */
+@media (max-width: 600px) {
+  .heatmap-grid { gap: 2px !important; }
+  .heatmap-cell { width: 10px !important; height: 10px !important; }
+}
+
+/* ─── Search command palette ─── */
+@media (max-width: 480px) {
+  .cmd-modal { padding-top: 1rem !important; }
+}

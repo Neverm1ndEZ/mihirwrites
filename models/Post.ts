@@ -34,6 +34,7 @@ export interface IPost extends Document {
   mood?: string;
   location?: string;
   voiceIntroUrl?: string;
+  ambientTrackUrl?: string;
   timeCapsuleUnlockAt?: Date;
   createdAt: Date;
   updatedAt: Date;
@@ -68,6 +69,7 @@ const PostSchema = new Schema<IPost>(
     mood: { type: String, enum: ["curious", "nostalgic", "excited", "reflective", "angry", "lost", ""] },
     location: { type: String, trim: true },
     voiceIntroUrl: { type: String },
+    ambientTrackUrl: { type: String },
     timeCapsuleUnlockAt: { type: Date },
   },
   { timestamps: true }

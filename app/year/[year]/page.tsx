@@ -1,6 +1,7 @@
 import Link from "next/link";
 import connectDB from "@/lib/mongodb";
 import Post from "@/models/Post";
+import WritingHeatmap from "@/components/WritingHeatmap";
 
 export const dynamic = "force-dynamic";
 
@@ -15,6 +16,7 @@ interface YearData {
   topMood?: string;
   firstPost: { title: string; slug: string; date: string; firstSentence: string };
   lastPost: { title: string; slug: string; date: string; firstSentence: string };
+  heatmap: Record<string, number>;
   empty?: boolean;
 }
 
@@ -24,7 +26,7 @@ async function getYearData(year: number): Promise<YearData | null> {
     const start = new Date(`${year}-01-01T00:00:00.000Z`);
     const end = new Date(`${year + 1}-01-01T00:00:00.000Z`);
     const posts = await Post.find({ published: true, deletedAt: null, createdAt: { $gte: start, $lt: end } }).lean();
-    if (!posts.length) return { year, empty: true } as YearData;
+    if (!posts.length) return { year, empty: true, heatmap: {} } as YearData;
 
     const totalWords = posts.reduce((s, p) => s + p.content.split(/\s+/).length, 0);
     const mostViewed = posts.reduce((a, b) => (a.viewCount > b.viewCount ? a : b));
@@ -43,6 +45,13 @@ async function getYearData(year: number): Promise<YearData | null> {
     const firstPost = sorted[0]; const lastPost = sorted[sorted.length - 1];
     const fs = (t: string) => t.replace(/#+\s/g, "").replace(/\*/g, "").split(/[.!?]/)[0]?.trim() || "";
 
+    // Build heatmap: date string -> count
+    const heatmap: Record<string, number> = {};
+    posts.forEach((p) => {
+      const dateKey = new Date(p.createdAt).toISOString().slice(0, 10);
+      heatmap[dateKey] = (heatmap[dateKey] || 0) + 1;
+    });
+
     return {
       year, totalPosts: posts.length, totalWords,
       totalViews: posts.reduce((s, p) => s + (p.viewCount || 0), 0),
@@ -51,6 +60,7 @@ async function getYearData(year: number): Promise<YearData | null> {
       topTags, topMood,
       firstPost: { title: firstPost.title, slug: firstPost.slug, date: String(firstPost.createdAt), firstSentence: fs(firstPost.content) },
       lastPost: { title: lastPost.title, slug: lastPost.slug, date: String(lastPost.createdAt), firstSentence: fs(lastPost.content) },
+      heatmap,
     };
   } catch { return null; }
 }
@@ -114,8 +124,11 @@ export default async function YearInReviewPage({ params }: { params: Promise<{ y
             {data.topMood && <StatCard label="Dominant mood" value={MOOD_EMOJIS[data.topMood] || "?"} sub={data.topMood} />}
           </div>
 
+          {/* Heatmap */}
+          <WritingHeatmap year={year} data={data.heatmap} />
+
           {/* Top posts */}
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem", marginBottom: "2.5rem" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "1rem", marginBottom: "2.5rem" }}>
             <div className="card" style={{ padding: "1.25rem" }}>
               <div style={{ fontSize: "0.75rem", color: "var(--fg-subtle)", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "0.75rem" }}>Most Read</div>
               <Link href={`/post/${data.mostViewed.slug}`} style={{ fontFamily: "var(--font-lora), serif", fontSize: "1.0625rem", fontWeight: 600, color: "var(--fg)", textDecoration: "none", lineHeight: 1.4, display: "block", marginBottom: "0.5rem" }}>
@@ -147,7 +160,7 @@ export default async function YearInReviewPage({ params }: { params: Promise<{ y
           )}
 
           {/* First & Last */}
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "1rem" }}>
             {[
               { label: "First post of the year", post: data.firstPost },
               { label: "Last post of the year", post: data.lastPost },

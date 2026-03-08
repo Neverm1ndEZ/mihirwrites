@@ -6,7 +6,10 @@ import MarkdownContent from "@/components/MarkdownContent";
 import CommentSection from "@/components/CommentSection";
 import Reactions from "@/components/Reactions";
 import WritingReplay from "@/components/WritingReplay";
+import ReadingProgress from "@/components/ReadingProgress";
+import BackToTop from "@/components/BackToTop";
 import ViewTracker from "@/components/ViewTracker";
+import AmbientPlayer from "@/components/AmbientPlayer";
 import SubscribeWidget from "@/components/SubscribeWidget";
 import connectDB from "@/lib/mongodb";
 import PostModel from "@/models/Post";
@@ -15,7 +18,7 @@ import CommentModel from "@/models/Comment";
 interface PostItem {
   _id: string; title: string; slug: string; excerpt: string; content: string;
   coverImage?: string; tags: string[]; createdAt: string; updatedAt: string;
-  readingTime?: number; mood?: string; location?: string; voiceIntroUrl?: string;
+  readingTime?: number; mood?: string; location?: string; voiceIntroUrl?: string; ambientTrackUrl?: string;
   timeCapsuleUnlockAt?: string;
   reactions: { like: number; heart: number; fire: number };
   writingSnapshots?: { content: string; capturedAt: string }[];
@@ -97,7 +100,10 @@ export default async function PostPage({ params }: { params: Promise<{ slug: str
   }
 
   return (
-    <article style={{ maxWidth: "800px", margin: "0 auto", padding: "2rem 1.5rem 5rem" }}>
+    <article className="post-article" style={{ maxWidth: "800px", margin: "0 auto", padding: "2rem 1.5rem 5rem" }}>
+      <ReadingProgress />
+      <BackToTop />
+      <AmbientPlayer customTrackUrl={post.ambientTrackUrl} />
       <ViewTracker slug={post.slug} />
 
       {/* Back link */}

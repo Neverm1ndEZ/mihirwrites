@@ -4,6 +4,7 @@ import connectDB from "@/lib/mongodb";
 import PostModel from "@/models/Post";
 import CommentModel from "@/models/Comment";
 import HomeClient from "@/components/HomeClient";
+import CommandPalette from "@/components/CommandPalette";
 export const dynamic = "force-dynamic";
 
 interface PostItem {
@@ -44,7 +45,7 @@ export default async function HomePage() {
   const featured = posts.find((p) => p.featured);
 
   return (
-    <div style={{ maxWidth: "800px", margin: "0 auto", padding: "3rem 1.5rem 5rem" }}>
+    <div className="home-page" style={{ maxWidth: "800px", margin: "0 auto", padding: "3rem 1.5rem 5rem" }}>
       {/* Hero */}
       <div style={{ marginBottom: "3rem" }} className="animate-fade-up">
         <h1 style={{ fontFamily: "var(--font-lora), serif", fontSize: "clamp(2.5rem, 5vw, 3.75rem)", fontWeight: 700, color: "var(--fg)", lineHeight: 1.1, letterSpacing: "-0.03em", marginBottom: "0.75rem" }}>
@@ -54,6 +55,9 @@ export default async function HomePage() {
           Thoughts, ideas, and stories — written as they come.
         </p>
       </div>
+
+      {/* Search */}
+      <CommandPalette posts={posts} />
 
       {/* Featured post */}
       {featured && (

@@ -20,6 +20,25 @@ function timeAgo(dateStr: string): string {
   return new Date(dateStr).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 }
 
+// Render thread content preserving newlines and structure
+function ThreadContent({ content }: { content: string }) {
+  const lines = content.split("\n");
+  return (
+    <div style={{ color: "var(--fg)", fontSize: "1rem", lineHeight: 1.75 }}>
+      {lines.map((line, i) => {
+        if (line.trim() === "") {
+          return <div key={i} style={{ height: "0.75em" }} />;
+        }
+        return (
+          <p key={i} style={{ margin: 0, marginBottom: i < lines.length - 1 ? "0.125rem" : 0 }}>
+            {line}
+          </p>
+        );
+      })}
+    </div>
+  );
+}
+
 export default function ThreadClient({ initialThreads }: { initialThreads: Thread[] }) {
   const [threads, setThreads] = useState<Thread[]>(initialThreads);
   const [isAdmin, setIsAdmin] = useState(false);
@@ -27,7 +46,6 @@ export default function ThreadClient({ initialThreads }: { initialThreads: Threa
   const [posting, setPosting] = useState(false);
 
   useEffect(() => {
-    // Check if admin cookie present by trying a lightweight admin endpoint
     fetch("/api/admin/audit").then((r) => { if (r.ok) setIsAdmin(true); });
   }, []);
 
@@ -65,10 +83,10 @@ export default function ThreadClient({ initialThreads }: { initialThreads: Threa
             className="input"
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder="What's on your mind? (max 500 chars)"
+            placeholder={"What's on your mind?\n\nYou can use multiple lines — structure is preserved."}
             maxLength={500}
-            rows={3}
-            style={{ resize: "vertical", marginBottom: "0.625rem" }}
+            rows={4}
+            style={{ resize: "vertical", marginBottom: "0.625rem", fontFamily: "inherit" }}
           />
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <span style={{ fontSize: "0.75rem", color: "var(--fg-subtle)" }}>{input.length}/500</span>
@@ -82,25 +100,33 @@ export default function ThreadClient({ initialThreads }: { initialThreads: Threa
       {threads.length === 0 ? (
         <p style={{ color: "var(--fg-subtle)", textAlign: "center", padding: "4rem 0" }}>Nothing here yet.</p>
       ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: "0" }}>
+        <div style={{ display: "flex", flexDirection: "column" }}>
           {threads.map((t, i) => (
             <div
               key={t._id}
               style={{
-                padding: "1.25rem 0",
+                padding: "1.5rem 0",
                 borderBottom: i < threads.length - 1 ? "1px solid var(--border)" : "none",
-                display: "flex", gap: "1rem", alignItems: "flex-start",
+                display: "flex",
+                gap: "1rem",
+                alignItems: "flex-start",
               }}
             >
+              {/* Accent line */}
               <div style={{
-                width: "2px", background: "var(--accent)", borderRadius: "1px",
-                alignSelf: "stretch", minHeight: "24px", flexShrink: 0, marginTop: "4px",
+                width: "2px",
+                background: "var(--accent)",
+                borderRadius: "1px",
+                alignSelf: "stretch",
+                minHeight: "24px",
+                flexShrink: 0,
+                marginTop: "4px",
+                opacity: 0.7,
               }} />
-              <div style={{ flex: 1 }}>
-                <p style={{ color: "var(--fg)", fontSize: "1rem", lineHeight: 1.7, marginBottom: "0.5rem" }}>
-                  {t.content}
-                </p>
-                <div style={{ display: "flex", gap: "1rem", alignItems: "center" }}>
+
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <ThreadContent content={t.content} />
+                <div style={{ display: "flex", gap: "1rem", alignItems: "center", marginTop: "0.625rem" }}>
                   <time style={{ fontSize: "0.75rem", color: "var(--fg-subtle)" }}>{timeAgo(t.createdAt)}</time>
                   {isAdmin && (
                     <button
