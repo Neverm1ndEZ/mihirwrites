@@ -546,6 +546,15 @@ export default function PostEditor({ initialData, mode, slug }: PostEditorProps)
   );
 }
 
+function L({ children, label }: { children: React.ReactNode; label: string }) {
+  return (
+    <div>
+      <label className="label">{label}</label>
+      {children}
+    </div>
+  );
+}
+
 // Sidebar content extracted so it can be rendered in desktop, mobile inline, or drawer
 function SidebarContent({
   coverImage, setCoverImage,
@@ -574,13 +583,7 @@ function SidebarContent({
   timeCapsuleUnlockAt: string; setTimeCapsuleUnlockAt: (v: string) => void;
   insertAtCursor: (text: string) => void;
 }) {
-  const L = ({ children, label }: { children: React.ReactNode; label: string }) => (
-    <div>
-      <label className="label">{label}</label>
-      {children}
-    </div>
-  );
-
+  
   return (
     <>
       {/* Cover image */}
