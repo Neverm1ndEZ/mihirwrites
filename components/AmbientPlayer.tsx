@@ -104,7 +104,7 @@ export default function AmbientPlayer({ customTrackUrl }: AmbientPlayerProps) {
   const isCrossfading = useRef(false);
 
   const tracks = customTrackUrl
-    ? [{ label: "Author's pick", url: sanitizeUrl(customTrackUrl) }, ...DEFAULT_TRACKS]
+    ? [{ label: "Author's pick", url: sanitizeUrl(customTrackUrl) }]
     : DEFAULT_TRACKS;
 
   const track = classifyUrl(tracks[trackIdx].url);
