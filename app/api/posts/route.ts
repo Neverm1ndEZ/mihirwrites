@@ -16,6 +16,7 @@ export async function GET(req: NextRequest) {
     const all = searchParams.get("all") === "true";
     const mood = searchParams.get("mood");
     const tag = searchParams.get("tag");
+    const category = searchParams.get("category");
 
     const now = new Date();
     // Base query: not soft-deleted
@@ -32,9 +33,10 @@ export async function GET(req: NextRequest) {
 
     if (mood) query.mood = mood;
     if (tag) query.tags = tag;
+    if (category) query.category = category;
 
     const posts = await Post.find(query)
-      .select("title slug excerpt coverImage tags published featured mood location readingTime viewCount reactions scheduledAt shareToken createdAt")
+      .select("title slug excerpt coverImage tags published featured mood location readingTime viewCount reactions scheduledAt shareToken category createdAt")
       .sort({ featured: -1, createdAt: -1 })
       .lean();
 
@@ -57,7 +59,7 @@ export async function POST(req: NextRequest) {
     const {
       title, excerpt, content, coverImage, tags, published,
       featured, seriesName, seriesPart, scheduledAt,
-      mood, location, voiceIntroUrl, timeCapsuleUnlockAt,
+      mood, location, voiceIntroUrl, timeCapsuleUnlockAt, category,
     } = body;
 
     if (!title || !excerpt || !content) {
@@ -77,6 +79,7 @@ export async function POST(req: NextRequest) {
       title, slug, excerpt, content, coverImage,
       tags: tags || [],
       published: published !== false,
+      category: category || "personal",
       readingTime,
       featured: featured || false,
       seriesName, seriesPart,

@@ -20,11 +20,14 @@ export async function POST(req: NextRequest) {
 
   try {
     await connectDB();
-    const { content } = await req.json();
+    const { content, category } = await req.json();
     if (!content?.trim()) return NextResponse.json({ error: "Content required" }, { status: 400 });
     if (content.trim().length > 500) return NextResponse.json({ error: "Too long (max 500 chars)" }, { status: 400 });
 
-    const thread = await Thread.create({ content: content.trim() });
+    const thread = await Thread.create({
+      content: content.trim(),
+      category: category === "professional" ? "professional" : "personal",
+    });
     await AuditLog.create({ action: "thread_created", detail: content.slice(0, 80) });
     return NextResponse.json({ thread }, { status: 201 });
   } catch {

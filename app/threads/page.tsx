@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic";
 async function getThreads() {
   try {
     await connectDB();
-    const threads = await Thread.find().sort({ createdAt: -1 }).lean();
+    const threads = await Thread.find().select("content category createdAt").sort({ createdAt: -1 }).lean();
     return JSON.parse(JSON.stringify(threads));
   } catch { return []; }
 }

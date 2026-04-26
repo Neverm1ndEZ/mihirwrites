@@ -5,6 +5,7 @@ import { useState, useEffect } from "react";
 interface Thread {
   _id: string;
   content: string;
+  category?: "personal" | "professional";
   createdAt: string;
 }
 
@@ -39,7 +40,7 @@ function ThreadContent({ content }: { content: string }) {
   );
 }
 
-export default function ThreadClient({ initialThreads }: { initialThreads: Thread[] }) {
+export default function ThreadClient({ initialThreads, activeCategory = "personal" }: { initialThreads: Thread[]; activeCategory?: "personal" | "professional" }) {
   const [threads, setThreads] = useState<Thread[]>(initialThreads);
   const [isAdmin, setIsAdmin] = useState(false);
   const [input, setInput] = useState("");
@@ -57,7 +58,7 @@ export default function ThreadClient({ initialThreads }: { initialThreads: Threa
       const res = await fetch("/api/threads", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ content: input.trim() }),
+        body: JSON.stringify({ content: input.trim(), category: activeCategory }),
       });
       const data = await res.json();
       if (res.ok) {

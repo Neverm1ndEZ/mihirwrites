@@ -41,6 +41,7 @@ export default async function EditPostPage({
         coverImage: post.coverImage || "",
         tags: post.tags?.join(", ") || "",
         published: post.published,
+        category: post.category || "personal",
       }}
     />
   );

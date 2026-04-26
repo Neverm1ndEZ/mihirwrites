@@ -18,6 +18,7 @@ export interface IPost extends Document {
   coverImage?: string;
   tags: string[];
   published: boolean;
+  category: "personal" | "professional";
   shareToken?: string; // private share token for unpublished posts
   deletedAt?: Date;
   // Content & Writing
@@ -50,6 +51,7 @@ const PostSchema = new Schema<IPost>(
     coverImage: { type: String },
     tags: [{ type: String, trim: true }],
     published: { type: Boolean, default: true },
+    category: { type: String, enum: ["personal", "professional"], default: "personal" },
     shareToken: { type: String, default: null, index: { sparse: true } },
     deletedAt: { type: Date, default: null },
     // Content & Writing
@@ -82,6 +84,7 @@ PostSchema.index({ createdAt: -1 });
 PostSchema.index({ tags: 1 });
 PostSchema.index({ mood: 1 });
 PostSchema.index({ featured: 1 });
+PostSchema.index({ category: 1 });
 
 const Post: Model<IPost> =
   mongoose.models.Post || mongoose.model<IPost>("Post", PostSchema);

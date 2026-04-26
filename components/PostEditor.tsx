@@ -9,6 +9,7 @@ import VoiceRecorder from "./VoiceRecorder";
 interface PostData {
   title: string; slug?: string; excerpt: string; content: string;
   coverImage: string; tags: string; published: boolean;
+  category?: "personal" | "professional";
   featured?: boolean; seriesName?: string; seriesPart?: string;
   scheduledAt?: string; mood?: string; location?: string;
   voiceIntroUrl?: string; timeCapsuleUnlockAt?: string; ambientTrackUrl?: string;
@@ -91,6 +92,7 @@ export default function PostEditor({ initialData, mode, slug }: PostEditorProps)
   const [coverImage, setCoverImage] = useState(initialData?.coverImage || "");
   const [tags, setTags] = useState(initialData?.tags || "");
   const [published, setPublished] = useState(initialData?.published !== false);
+  const [category, setCategory] = useState<"personal" | "professional">(initialData?.category || "personal");
   const [featured, setFeatured] = useState(initialData?.featured || false);
   const [seriesName, setSeriesName] = useState(initialData?.seriesName || "");
   const [seriesPart, setSeriesPart] = useState(initialData?.seriesPart || "");
@@ -205,7 +207,7 @@ export default function PostEditor({ initialData, mode, slug }: PostEditorProps)
         title: title.trim(), excerpt: excerpt.trim(), content: content.trim(),
         coverImage: coverImage.trim(),
         tags: tags.split(",").map(t => t.trim()).filter(Boolean),
-        published, featured,
+        published, category, featured,
         seriesName: seriesName.trim() || undefined,
         seriesPart: seriesPart ? parseInt(seriesPart) : undefined,
         scheduledAt: scheduledAt || undefined,
@@ -489,6 +491,7 @@ export default function PostEditor({ initialData, mode, slug }: PostEditorProps)
               tags={tags} setTags={setTags}
               mood={mood} setMood={setMood}
               location={location} setLocation={setLocation}
+              category={category} setCategory={setCategory}
               featured={featured} setFeatured={setFeatured}
               voiceIntroUrl={voiceIntroUrl} setVoiceIntroUrl={setVoiceIntroUrl}
               ambientTrackUrl={ambientTrackUrl} setAmbientTrackUrl={setAmbientTrackUrl}
@@ -508,6 +511,7 @@ export default function PostEditor({ initialData, mode, slug }: PostEditorProps)
             tags={tags} setTags={setTags}
             mood={mood} setMood={setMood}
             location={location} setLocation={setLocation}
+            category={category} setCategory={setCategory}
             featured={featured} setFeatured={setFeatured}
             voiceIntroUrl={voiceIntroUrl} setVoiceIntroUrl={setVoiceIntroUrl}
             ambientTrackUrl={ambientTrackUrl} setAmbientTrackUrl={setAmbientTrackUrl}
@@ -532,6 +536,7 @@ export default function PostEditor({ initialData, mode, slug }: PostEditorProps)
           tags={tags} setTags={setTags}
           mood={mood} setMood={setMood}
           location={location} setLocation={setLocation}
+          category={category} setCategory={setCategory}
           featured={featured} setFeatured={setFeatured}
           voiceIntroUrl={voiceIntroUrl} setVoiceIntroUrl={setVoiceIntroUrl}
           ambientTrackUrl={ambientTrackUrl} setAmbientTrackUrl={setAmbientTrackUrl}
@@ -561,6 +566,7 @@ function SidebarContent({
   tags, setTags,
   mood, setMood,
   location, setLocation,
+  category, setCategory,
   featured, setFeatured,
   voiceIntroUrl, setVoiceIntroUrl,
   ambientTrackUrl, setAmbientTrackUrl,
@@ -574,6 +580,7 @@ function SidebarContent({
   tags: string; setTags: (v: string) => void;
   mood: string; setMood: (v: string) => void;
   location: string; setLocation: (v: string) => void;
+  category: "personal" | "professional"; setCategory: (v: "personal" | "professional") => void;
   featured: boolean; setFeatured: (v: boolean) => void;
   voiceIntroUrl: string; setVoiceIntroUrl: (v: string) => void;
   ambientTrackUrl: string; setAmbientTrackUrl: (v: string) => void;
@@ -645,6 +652,28 @@ function SidebarContent({
 
       {/* Flags & Advanced */}
       <Section title="⚙  Options">
+        <div>
+          <label className="label">Category</label>
+          <div style={{ display: "flex", gap: "0.5rem" }}>
+            {(["personal", "professional"] as const).map((c) => (
+              <button
+                key={c}
+                type="button"
+                onClick={() => setCategory(c)}
+                style={{
+                  flex: 1, padding: "0.4rem 0", fontSize: "0.8125rem", fontWeight: 500,
+                  borderRadius: "6px", cursor: "pointer", fontFamily: "inherit",
+                  border: `1px solid ${category === c ? "var(--accent)" : "var(--border)"}`,
+                  background: category === c ? "var(--accent)" : "transparent",
+                  color: category === c ? "#fff" : "var(--fg-muted)",
+                  transition: "all 0.15s",
+                }}
+              >
+                {c === "personal" ? "Personal" : "Work"}
+              </button>
+            ))}
+          </div>
+        </div>
         <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
           <Toggle value={featured} onToggle={() => setFeatured(!featured)} label="Featured post" />
         </div>
