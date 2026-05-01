@@ -25,7 +25,7 @@ async function getYearData(year: number): Promise<YearData | null> {
     await connectDB();
     const start = new Date(`${year}-01-01T00:00:00.000Z`);
     const end = new Date(`${year + 1}-01-01T00:00:00.000Z`);
-    const posts = await Post.find({ published: true, deletedAt: null, createdAt: { $gte: start, $lt: end } }).lean();
+    const posts = await Post.find({ published: true, deletedAt: null, category: "professional", createdAt: { $gte: start, $lt: end } }).lean();
     if (!posts.length) return { year, empty: true, heatmap: {} } as YearData;
 
     const totalWords = posts.reduce((s, p) => s + p.content.split(/\s+/).length, 0);

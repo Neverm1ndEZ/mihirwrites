@@ -15,6 +15,7 @@ import SubscribeWidget from "@/components/SubscribeWidget";
 import connectDB from "@/lib/mongodb";
 import PostModel from "@/models/Post";
 import CommentModel from "@/models/Comment";
+import { isAdminAuthenticated } from "@/lib/auth";
 
 // Always server-render — never cache, so searchParams (share token) is always read fresh
 export const dynamic = "force-dynamic";
@@ -22,7 +23,7 @@ export const dynamic = "force-dynamic";
 interface PostItem {
   _id: string; title: string; slug: string; excerpt: string; content: string;
   coverImage?: string; tags: string[]; createdAt: string; updatedAt: string;
-  published: boolean; shareToken?: string;
+  published: boolean; shareToken?: string; category?: "personal" | "professional";
   readingTime?: number; mood?: string; location?: string; voiceIntroUrl?: string; ambientTrackUrl?: string;
   timeCapsuleUnlockAt?: string;
   reactions: { like: number; heart: number; fire: number };
@@ -113,12 +114,36 @@ export default async function PostPage({
 }) {
   const { slug } = await params;
   const { token } = await searchParams;
-  const data = await getPost(slug, token);
+  const [data, isAdmin] = await Promise.all([getPost(slug, token), isAdminAuthenticated()]);
   if (!data) notFound();
 
   const { post, comments, related }: { post: PostItem; comments: CommentItem[]; related: { title: string; slug: string; excerpt: string }[] } = data;
 
   const isPreview = !post.published && !!token;
+
+  // Paywall: personal posts are members-only
+  if ((post.category || "personal") === "personal" && !isAdmin && !isPreview) {
+    return (
+      <div style={{ maxWidth: "600px", margin: "0 auto", padding: "4rem 1.5rem", textAlign: "center" }}>
+        <div style={{ fontSize: "2rem", marginBottom: "1.25rem" }}>🔒</div>
+        <h1 style={{ fontFamily: "var(--font-lora), serif", fontSize: "1.75rem", fontWeight: 700, color: "var(--fg)", marginBottom: "0.75rem", letterSpacing: "-0.02em" }}>
+          {post.title}
+        </h1>
+        <p style={{ color: "var(--fg-muted)", fontSize: "0.9375rem", maxWidth: "36ch", margin: "0 auto 0.75rem", lineHeight: 1.65 }}>
+          {post.excerpt}
+        </p>
+        <p style={{ color: "var(--fg-subtle)", fontSize: "0.875rem", marginBottom: "2rem" }}>
+          This is personal writing — members only.
+        </p>
+        <span style={{ display: "inline-block", padding: "0.625rem 1.5rem", border: "1px solid var(--border)", borderRadius: "8px", fontSize: "0.875rem", color: "var(--fg-muted)", cursor: "default" }}>
+          Coming soon
+        </span>
+        <div style={{ marginTop: "2rem" }}>
+          <Link href="/" style={{ color: "var(--fg-muted)", fontSize: "0.875rem", textDecoration: "none" }}>← Back</Link>
+        </div>
+      </div>
+    );
+  }
 
   // Time capsule: locked?
   const isLocked = post.timeCapsuleUnlockAt && new Date(post.timeCapsuleUnlockAt) > new Date();

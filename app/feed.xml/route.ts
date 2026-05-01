@@ -5,7 +5,7 @@ import Post from "@/models/Post";
 export async function GET() {
   try {
     await connectDB();
-    const posts = await Post.find({ published: true, deletedAt: null })
+    const posts = await Post.find({ published: true, deletedAt: null, category: "professional" })
       .select("title slug excerpt createdAt tags")
       .sort({ createdAt: -1 })
       .limit(20)

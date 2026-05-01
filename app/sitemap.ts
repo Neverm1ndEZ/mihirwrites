@@ -18,7 +18,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   // Dynamic post routes
   try {
     await connectDB();
-    const posts = await Post.find({ published: true })
+    const posts = await Post.find({ published: true, category: "professional" })
       .select("slug updatedAt")
       .lean();
 

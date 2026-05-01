@@ -7,7 +7,9 @@ import { isAdminAuthenticated } from "@/lib/auth";
 export async function GET() {
   try {
     await connectDB();
-    const threads = await Thread.find().sort({ createdAt: -1 }).lean();
+    const isAdmin = await isAdminAuthenticated();
+    const query = isAdmin ? {} : { category: "professional" };
+    const threads = await Thread.find(query).sort({ createdAt: -1 }).lean();
     return NextResponse.json({ threads: JSON.parse(JSON.stringify(threads)) });
   } catch {
     return NextResponse.json({ error: "Failed" }, { status: 500 });
