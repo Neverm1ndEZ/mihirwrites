@@ -1,7 +1,10 @@
-"use client";
+// Shared component (no "use client"): renders on the server for the post page
+// (zero markdown-parser JS shipped there) and is bundled client-side only where
+// it's imported by a client component (e.g. the editor preview).
 import React from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import rehypeSlug from "rehype-slug";
 import Image from "next/image";
 
 interface Props {
@@ -29,7 +32,16 @@ export default function MarkdownContent({ content }: Props) {
     <div className="prose">
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
+        rehypePlugins={[rehypeSlug]}
         components={{
+          table({ children }) {
+            return (
+              <div className="table-wrap">
+                <table>{children}</table>
+              </div>
+            );
+          },
+
           img({ src, alt }) {
             if (!src || typeof src !== "string") return null;
             const mediaType = getMediaType(src);

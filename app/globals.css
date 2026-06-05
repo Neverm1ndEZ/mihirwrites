@@ -73,10 +73,15 @@ a:hover { color: var(--accent-hover); }
   max-width: 68ch;
   font-size: 1.0625rem;
   line-height: 1.8;
+  /* Stop long words / URLs / inline code from forcing horizontal scroll on mobile */
+  overflow-wrap: break-word;
 }
+.prose pre { max-width: 100%; }
 .prose h1 { font-size: 2rem; margin: 2.5rem 0 1rem; }
 .prose h2 { font-size: 1.5rem; margin: 2rem 0 0.75rem; }
 .prose h3 { font-size: 1.25rem; margin: 1.75rem 0 0.5rem; }
+/* Offset so anchor-linked headings clear the 56px sticky nav */
+.prose :is(h1, h2, h3, h4, h5, h6)[id] { scroll-margin-top: 72px; }
 .prose p { margin: 1.25rem 0; }
 .prose ul, .prose ol { padding-left: 1.5rem; margin: 1rem 0; }
 .prose li { margin: 0.35rem 0; }
@@ -122,6 +127,121 @@ a:hover { color: var(--accent-hover); }
 }
 .prose a { color: var(--accent); text-decoration: underline; text-underline-offset: 3px; }
 .prose strong { font-weight: 600; color: var(--fg); }
+
+/* ─── GFM tables ─── */
+.prose .table-wrap {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  margin: 1.5rem 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.prose .table-wrap table { margin: 0; border: none; }
+.prose table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 0.9375rem;
+  line-height: 1.5;
+}
+.prose th, .prose td {
+  border: 1px solid var(--border);
+  padding: 0.5rem 0.75rem;
+  text-align: left;
+  vertical-align: top;
+}
+.prose thead th {
+  background: var(--bg-secondary);
+  font-weight: 600;
+  color: var(--fg);
+  white-space: nowrap;
+}
+.prose tbody tr:nth-child(even) { background: color-mix(in srgb, var(--bg-secondary) 45%, transparent); }
+.prose table code { white-space: nowrap; }
+
+/* ─── GFM task lists ─── */
+.prose li input[type="checkbox"] { margin-right: 0.5rem; accent-color: var(--accent); }
+.prose li:has(> input[type="checkbox"]) { list-style: none; margin-left: -1.25rem; }
+
+/* ─── GFM strikethrough ─── */
+.prose del { color: var(--fg-subtle); }
+
+/* ─── Reading modes (attribute-driven so switching doesn't re-parse a stylesheet) ─── */
+html[data-reader-mode] body { transition: background-color 0.35s ease, color 0.35s ease; }
+
+html[data-reader-mode="coffee"] {
+  --bg: #f5edd6; --bg-secondary: #ede2c4; --fg: #3b2f1e; --fg-muted: #6b5740;
+  --fg-subtle: #9a8265; --border: #d9c9a8; --card-bg: #faf4e4;
+}
+/* Scope sepia to prose only — never body/.post-article, or it becomes the
+   containing block for the floating tools and drops them to the page bottom. */
+html[data-reader-mode="coffee"] .prose { filter: sepia(14%); letter-spacing: 0.01em; }
+
+html[data-reader-mode="night"] {
+  --bg: #09090b; --bg-secondary: #101012; --fg: #d4d0c8; --fg-muted: #8a8680;
+  --fg-subtle: #5a5650; --border: #1e1d1b; --card-bg: #111113; --accent: #c8914a;
+}
+html[data-reader-mode="night"] body { font-size: 17px; line-height: 1.9; }
+html[data-reader-mode="night"] .prose { font-size: 1.1rem; max-width: 62ch; }
+html[data-reader-mode="night"] h1,
+html[data-reader-mode="night"] h2,
+html[data-reader-mode="night"] h3 { letter-spacing: -0.025em; font-weight: 500; }
+
+html[data-reader-mode="focus"] nav,
+html[data-reader-mode="focus"] footer,
+html[data-reader-mode="focus"] [class*="subscribe"], html[data-reader-mode="focus"] [class*="Subscribe"],
+html[data-reader-mode="focus"] [class*="related"], html[data-reader-mode="focus"] [class*="Related"],
+html[data-reader-mode="focus"] [class*="comment"], html[data-reader-mode="focus"] [class*="Comment"],
+html[data-reader-mode="focus"] [class*="reaction"], html[data-reader-mode="focus"] [class*="Reaction"],
+html[data-reader-mode="focus"] .tag { display: none !important; }
+html[data-reader-mode="focus"] { --bg: #fefefe; --fg: #1a1a1a; --bg-secondary: #f5f5f5; }
+html[data-reader-mode="focus"][data-theme="dark"] { --bg: #0d0d0d; --fg: #e0e0e0; }
+html[data-reader-mode="focus"] .prose { max-width: 64ch; margin: 0 auto; font-size: 1.125rem; line-height: 1.85; }
+html[data-reader-mode="focus"] .post-article { padding-top: 4rem !important; }
+
+/* ─── Reading-mode ripple (View Transitions) ─── */
+/* Kill the default cross-fade so only the JS-driven circular clip reveals the
+   new theme. The new snapshot sits on top and is engulfed outward from centre. */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation: none;
+  mix-blend-mode: normal;
+}
+::view-transition-new(root) { z-index: 1; }
+::view-transition-old(root) { z-index: 0; }
+
+/* ─── Long-post scroll performance ─── */
+/* Skip rendering/painting heavy, off-screen blocks. `auto` in
+   contain-intrinsic-size caches each block's real size after first render, so
+   scrolling stays stable. This is the main lever for buttery scrolling on the
+   long, code-heavy posts. */
+.prose pre,
+.prose .table-wrap {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 320px;
+}
+
+/* ─── Scroll-driven reveal animations ─── */
+/* Compositor-only (opacity + transform), so they don't add scroll cost.
+   Gated behind reduced-motion and feature support, with a no-op fallback. */
+@media (prefers-reduced-motion: no-preference) {
+  @supports (animation-timeline: view()) {
+    .prose > h2,
+    .prose > h3,
+    .prose > pre,
+    .prose > blockquote,
+    .prose > .table-wrap,
+    .prose > img,
+    .prose > p > img {
+      animation: rm-reveal linear both;
+      animation-timeline: view();
+      animation-range: entry 2% cover 16%;
+    }
+    @keyframes rm-reveal {
+      from { opacity: 0; transform: translateY(20px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+  }
+}
 
 /* ─── Custom scrollbar ─── */
 ::-webkit-scrollbar { width: 6px; }
@@ -278,6 +398,8 @@ textarea.input { resize: vertical; min-height: 120px; }
   .prose h1 { font-size: 1.625rem; }
   .prose h2 { font-size: 1.25rem; }
   .prose h3 { font-size: 1.125rem; }
+  .prose table { font-size: 0.8125rem; }
+  .prose th, .prose td { padding: 0.4rem 0.55rem; }
 
   /* Navbar */
   .navbar-links span,

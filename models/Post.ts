@@ -46,7 +46,7 @@ const PostSchema = new Schema<IPost>(
   {
     title: { type: String, required: true, trim: true },
     slug: { type: String, required: true, unique: true, trim: true },
-    excerpt: { type: String, required: true, trim: true, maxlength: 300 },
+    excerpt: { type: String, required: true, trim: true },
     content: { type: String, required: true },
     coverImage: { type: String },
     tags: [{ type: String, trim: true }],
@@ -79,7 +79,7 @@ const PostSchema = new Schema<IPost>(
   { timestamps: true }
 );
 
-PostSchema.index({ slug: 1 });
+// slug already gets a unique index from the field definition above.
 PostSchema.index({ createdAt: -1 });
 PostSchema.index({ tags: 1 });
 PostSchema.index({ mood: 1 });

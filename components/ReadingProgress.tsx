@@ -6,10 +6,15 @@ export default function ReadingProgress() {
   const [progress, setProgress] = useState(0);
 
   useEffect(() => {
+    let ticking = false;
     const handler = () => {
-      const total = document.documentElement.scrollHeight - window.innerHeight;
-      if (total <= 0) { setProgress(0); return; }
-      setProgress(Math.min(100, (window.scrollY / total) * 100));
+      if (ticking) return;
+      ticking = true;
+      requestAnimationFrame(() => {
+        const total = document.documentElement.scrollHeight - window.innerHeight;
+        setProgress(total <= 0 ? 0 : Math.min(100, (window.scrollY / total) * 100));
+        ticking = false;
+      });
     };
     window.addEventListener("scroll", handler, { passive: true });
     handler();

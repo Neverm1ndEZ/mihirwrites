@@ -317,16 +317,18 @@ export default function AmbientPlayer({ customTrackUrl }: AmbientPlayerProps) {
           style={{ position: "fixed", left: "-9999px", top: 0, width: "1px", height: "1px" }} title="ambient" aria-hidden />
       )}
 
-      <div style={{ position: "fixed", bottom: "1.5rem", left: "1.5rem", zIndex: 90, display: "flex", flexDirection: "column", alignItems: "flex-start" }}>
+      <div className="ambient-root" style={{ position: "fixed", bottom: "1.5rem", left: "1.5rem", zIndex: 90, display: "flex", flexDirection: "column", alignItems: "flex-start" }}>
         {expanded && (
-          <div style={{
+          <div className="ambient-panel" style={{
             background: "var(--bg-card, var(--bg-secondary))",
             border: "1px solid var(--border)",
             borderRadius: "14px",
             padding: "1rem 1.125rem",
             marginBottom: "0.5rem",
             boxShadow: "var(--shadow-lg)",
-            width: "280px",
+            width: "min(280px, calc(100vw - 3rem))",
+            maxHeight: "calc(100vh - 6rem)",
+            overflowY: "auto",
           }}>
             {/* Header */}
             <div style={{ fontSize: "0.6875rem", color: "var(--fg-subtle)", marginBottom: "0.625rem", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em" }}>Ambient</div>
@@ -501,6 +503,12 @@ export default function AmbientPlayer({ customTrackUrl }: AmbientPlayerProps) {
         @keyframes ambientPulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
         .ambient-label { display: none; }
         @media (min-width: 480px) { .ambient-label { display: inline; } }
+        /* Mobile: give the panel more breathing room and bigger tap targets */
+        @media (max-width: 480px) {
+          .ambient-panel { width: calc(100vw - 2.5rem) !important; padding: 1rem !important; }
+          .ambient-panel input[type="range"] { height: 22px; }
+          .ambient-panel button { min-height: 34px; }
+        }
       `}</style>
     </>
   );

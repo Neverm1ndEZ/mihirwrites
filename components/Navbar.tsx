@@ -12,7 +12,18 @@ export default function Navbar() {
   const pathname = usePathname();
 
   useEffect(() => {
-    const handler = () => setScrolled(window.scrollY > 20);
+    let ticking = false;
+    const handler = () => {
+      if (ticking) return;
+      ticking = true;
+      requestAnimationFrame(() => {
+        setScrolled((prev) => {
+          const next = window.scrollY > 20;
+          return prev === next ? prev : next;
+        });
+        ticking = false;
+      });
+    };
     window.addEventListener("scroll", handler, { passive: true });
     return () => window.removeEventListener("scroll", handler);
   }, []);
@@ -80,9 +91,14 @@ export default function Navbar() {
           top: 0,
           zIndex: 50,
           borderBottom: scrolled ? "1px solid var(--border)" : "1px solid transparent",
-          backdropFilter: "blur(12px)",
-          backgroundColor: scrolled ? "color-mix(in srgb, var(--bg) 85%, transparent)" : "transparent",
-          transition: "all 0.3s ease",
+          // Only blur once scrolled — an always-on backdrop-filter forces the
+          // browser to repaint the blurred strip every frame while scrolling a
+          // long page, which is the main source of scroll jank.
+          backdropFilter: scrolled ? "blur(8px)" : "none",
+          WebkitBackdropFilter: scrolled ? "blur(8px)" : "none",
+          // Slightly more opaque bg so a smaller (cheaper) blur still reads cleanly.
+          backgroundColor: scrolled ? "color-mix(in srgb, var(--bg) 88%, transparent)" : "transparent",
+          transition: "background-color 0.3s ease, border-color 0.3s ease",
         }}
       >
         <nav

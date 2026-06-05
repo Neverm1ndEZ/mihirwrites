@@ -1,17 +1,17 @@
+import { cache } from "react";
 import { Metadata } from "next";
 import { notFound } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
 import MarkdownContent from "@/components/MarkdownContent";
-import CommentSection from "@/components/CommentSection";
+import InlineMarkdown from "@/components/InlineMarkdown";
 import Reactions from "@/components/Reactions";
-import WritingReplay from "@/components/WritingReplay";
 import ReadingProgress from "@/components/ReadingProgress";
 import BackToTop from "@/components/BackToTop";
 import ViewTracker from "@/components/ViewTracker";
-import AmbientPlayer from "@/components/AmbientPlayer";
 import ReaderMoodMode from "@/components/ReaderMoodMode";
 import SubscribeWidget from "@/components/SubscribeWidget";
+import { AmbientPlayerLazy, WritingReplayLazy, CommentSectionLazy } from "@/components/LazyWidgets";
 import connectDB from "@/lib/mongodb";
 import PostModel from "@/models/Post";
 import CommentModel from "@/models/Comment";
@@ -36,7 +36,9 @@ interface CommentItem {
   parentId?: string | null; createdAt: string;
 }
 
-async function getPost(slug: string, token?: string) {
+// Wrapped in cache() so generateMetadata + the page component share one result
+// per request instead of each running the DB queries.
+const getPost = cache(async (slug: string, token?: string) => {
   try {
     await connectDB();
 
@@ -61,21 +63,35 @@ async function getPost(slug: string, token?: string) {
     }
 
     if (!post) return null;
-    if (!post) return null;
-    const comments = await CommentModel.find({ postSlug: slug }).sort({ createdAt: 1 }).lean();
 
-    let related: { title: string; slug: string; excerpt: string }[] = [];
-    if (post.tags?.length && post.published) {
-      const rel = await PostModel.find({
+    // Comments and related posts are independent of each other — fetch in
+    // parallel to cut TTFB on this dynamically-rendered page.
+    const relatedPromise = (() => {
+      if (!(post.tags?.length && post.published)) return Promise.resolve([]);
+      // Keep related posts within the same category — never surface personal
+      // posts under a professional one (or vice versa). Legacy posts with no
+      // category are treated as "personal".
+      const cat = post.category || "personal";
+      const categoryFilter =
+        cat === "personal"
+          ? { category: { $in: ["personal", null] } }
+          : { category: "professional" };
+      return PostModel.find({
         slug: { $ne: slug }, published: true, deletedAt: null,
+        ...categoryFilter,
         tags: { $in: post.tags },
       }).select("title slug excerpt").limit(3).lean();
-      related = JSON.parse(JSON.stringify(rel));
-    }
+    })();
+
+    const [comments, rel] = await Promise.all([
+      CommentModel.find({ postSlug: slug }).sort({ createdAt: 1 }).lean(),
+      relatedPromise,
+    ]);
+    const related: { title: string; slug: string; excerpt: string }[] = JSON.parse(JSON.stringify(rel));
 
     return JSON.parse(JSON.stringify({ post, comments, related }));
   } catch { return null; }
-}
+});
 
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
   const { slug } = await params;
@@ -163,7 +179,7 @@ export default async function PostPage({
     <article className="post-article" style={{ maxWidth: "800px", margin: "0 auto", padding: "2rem 1.5rem 5rem" }}>
       <ReadingProgress />
       <BackToTop />
-      <AmbientPlayer customTrackUrl={post.ambientTrackUrl} />
+      <AmbientPlayerLazy customTrackUrl={post.ambientTrackUrl} />
       <ReaderMoodMode />
       {post.published && <ViewTracker slug={post.slug} />}
 
@@ -216,9 +232,9 @@ export default async function PostPage({
           {post.title}
         </h1>
 
-        <p style={{ fontSize: "1.125rem", color: "var(--fg-muted)", lineHeight: 1.65, marginBottom: "1.5rem", fontStyle: "italic" }}>
-          {post.excerpt}
-        </p>
+        <div style={{ fontSize: "1.125rem", color: "var(--fg-muted)", lineHeight: 1.65, marginBottom: "1.5rem", fontStyle: "italic" }}>
+          <InlineMarkdown content={post.excerpt} />
+        </div>
 
         {/* Voice intro */}
         {post.voiceIntroUrl && (
@@ -234,7 +250,7 @@ export default async function PostPage({
         {/* Writing replay */}
         {post.writingSnapshots && post.writingSnapshots.length > 1 && (
           <div style={{ marginBottom: "2rem" }}>
-            <WritingReplay snapshots={post.writingSnapshots} />
+            <WritingReplayLazy snapshots={post.writingSnapshots} />
           </div>
         )}
       </div>
@@ -296,7 +312,7 @@ export default async function PostPage({
 
       {/* Comments — only on published */}
       {post.published && (
-        <CommentSection slug={post.slug} initialComments={comments} />
+        <CommentSectionLazy slug={post.slug} initialComments={comments} />
       )}
     </article>
   );

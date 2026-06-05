@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import MoodGate from "./MoodGate";
+import InlineMarkdown from "./InlineMarkdown";
 
 interface PostItem {
   _id: string; title: string; slug: string; excerpt: string;
@@ -81,7 +82,7 @@ function FeaturedCard({ post }: { post: PostItem }) {
             <h2 style={{ fontFamily: "var(--font-lora), serif", fontSize: "1.375rem", fontWeight: 700, color: "var(--fg)", lineHeight: 1.3, letterSpacing: "-0.02em", marginBottom: "0.5rem" }}>
               {post.title}
             </h2>
-            <p style={{ color: "var(--fg-muted)", fontSize: "0.9375rem", lineHeight: 1.65 }}>{post.excerpt}</p>
+            <p style={{ color: "var(--fg-muted)", fontSize: "0.9375rem", lineHeight: 1.65 }}><InlineMarkdown content={post.excerpt} /></p>
           </div>
         </div>
       </Link>
@@ -126,7 +127,7 @@ function PostList({ posts, emptyLabel }: { posts: PostItem[]; emptyLabel: string
             </h2>
 
             <p style={{ color: "var(--fg-muted)", fontSize: "0.9375rem", lineHeight: 1.7, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
-              {post.excerpt}
+              <InlineMarkdown content={post.excerpt} />
             </p>
 
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: "0.875rem" }}>

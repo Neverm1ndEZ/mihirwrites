@@ -4,6 +4,7 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import MediaUploader from "./MediaUploader";
 import MarkdownContent from "./MarkdownContent";
+import InlineMarkdown from "./InlineMarkdown";
 import VoiceRecorder from "./VoiceRecorder";
 
 interface PostData {
@@ -375,8 +376,7 @@ export default function PostEditor({ initialData, mode, slug }: PostEditorProps)
             className="input"
             value={excerpt}
             onChange={e => setExcerpt(e.target.value)}
-            placeholder="One-line excerpt — what's this post about?"
-            maxLength={300}
+            placeholder="Excerpt — what's this post about? (markdown supported)"
             rows={2}
             style={{
               resize: "none", fontStyle: "italic",
@@ -471,7 +471,7 @@ export default function PostEditor({ initialData, mode, slug }: PostEditorProps)
           {preview ? (
             <div className="card" style={{ padding: "2rem", minHeight: "50vh" }}>
               {title && <h1 style={{ fontFamily: "var(--font-lora), serif", fontSize: "2rem", fontWeight: 700, color: "var(--fg)", letterSpacing: "-0.03em", marginBottom: "1rem" }}>{title}</h1>}
-              {excerpt && <p style={{ color: "var(--fg-muted)", fontSize: "1.0625rem", fontStyle: "italic", marginBottom: "2rem", paddingBottom: "1.5rem", borderBottom: "1px solid var(--border)" }}>{excerpt}</p>}
+              {excerpt && <div style={{ color: "var(--fg-muted)", fontSize: "1.0625rem", fontStyle: "italic", marginBottom: "2rem", paddingBottom: "1.5rem", borderBottom: "1px solid var(--border)" }}><InlineMarkdown content={excerpt} /></div>}
               <MarkdownContent content={content || "*Nothing to preview yet*"} />
             </div>
           ) : (

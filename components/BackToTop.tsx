@@ -6,10 +6,16 @@ export default function BackToTop() {
   const [visible, setVisible] = useState(false);
 
   useEffect(() => {
+    let ticking = false;
     const handler = () => {
-      const scrolled = window.scrollY;
-      const total = document.documentElement.scrollHeight - window.innerHeight;
-      setVisible(total > 200 && scrolled / total > 0.4);
+      if (ticking) return;
+      ticking = true;
+      requestAnimationFrame(() => {
+        const scrolled = window.scrollY;
+        const total = document.documentElement.scrollHeight - window.innerHeight;
+        setVisible(total > 200 && scrolled / total > 0.4);
+        ticking = false;
+      });
     };
     window.addEventListener("scroll", handler, { passive: true });
     return () => window.removeEventListener("scroll", handler);
@@ -23,7 +29,8 @@ export default function BackToTop() {
       aria-label="Back to top"
       style={{
         position: "fixed",
-        bottom: "1.5rem",
+        /* Sit above the reading-mode FAB (also bottom-right) so they don't overlap */
+        bottom: "5rem",
         right: "1.5rem",
         width: "40px",
         height: "40px",
